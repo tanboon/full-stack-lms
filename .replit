@@ -24,3 +24,10 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+JWT_SECRET = "3397415f186f8c0bbf43e152f09d85ce0f58b0ed0ef1357867f2d8a34a16063349cc83dbb41ecc04c66c5b096f1a81969d70cd93e985a800dc0470ff14e26742"
+JWT_EXPIRES_IN = "7d"
+NODE_ENV = "development"
