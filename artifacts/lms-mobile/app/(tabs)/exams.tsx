@@ -131,8 +131,12 @@ export default function ExamsScreen() {
       const json = await res.json();
       if (json.status === "success") {
         setExams(json.data ?? []);
+      } else if (res.status === 429) {
+        setExamsError("Too many requests. Please wait a moment and try again.");
+      } else if (res.status === 401) {
+        setExamsError("Session expired. Please sign out and log in again.");
       } else {
-        setExamsError("Could not load exams. Please log in.");
+        setExamsError(json.message ?? "Could not load exams. Please try again.");
       }
     } catch {
       setExamsError("Network error. Check your connection.");
@@ -545,7 +549,14 @@ export default function ExamsScreen() {
       {examsError && (
         <View style={[styles.errorCard, { backgroundColor: "#FF5C5C12", borderColor: "#FF5C5C30", marginHorizontal: 20, marginBottom: 16 }]}>
           <Feather name="alert-circle" size={16} color="#FF5C5C" />
-          <Text style={[styles.errorText, { fontFamily: "Inter_400Regular" }]}>{examsError}</Text>
+          <Text style={[styles.errorText, { fontFamily: "Inter_400Regular", flex: 1 }]}>{examsError}</Text>
+          <Pressable
+            onPress={() => fetchExams()}
+            style={[styles.retryBtn, { backgroundColor: "#FF5C5C20", borderColor: "#FF5C5C40" }]}
+          >
+            <Feather name="refresh-cw" size={13} color="#FF5C5C" />
+            <Text style={[{ fontSize: 12, color: "#FF5C5C", fontFamily: "Inter_600SemiBold" }]}>Retry</Text>
+          </Pressable>
         </View>
       )}
 
@@ -744,6 +755,7 @@ const styles = StyleSheet.create({
   emptyTipText: { flex: 1, fontSize: 13, lineHeight: 20 },
   errorCard: { flexDirection: "row", alignItems: "center", gap: 8, padding: 14, borderRadius: 12, borderWidth: 1 },
   errorText: { fontSize: 14, flex: 1, color: "#FF5C5C" },
+  retryBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   // Form styles
   formHeader: {
     flexDirection: "row", alignItems: "center", gap: 12,

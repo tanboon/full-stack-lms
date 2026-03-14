@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  ActivityIndicator, useColorScheme, Alert,
+  ActivityIndicator, useColorScheme, Alert, Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -97,14 +97,22 @@ export default function DashboardScreen() {
     }, [loadData])
   );
 
-  const handleLogout = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out", style: "destructive",
-        onPress: async () => { await logout(); router.replace("/login"); },
-      },
-    ]);
+  const handleLogout = async () => {
+    const doLogout = async () => {
+      await logout();
+      router.replace("/login");
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to sign out?")) {
+        await doLogout();
+      }
+    } else {
+      Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign Out", style: "destructive", onPress: doLogout },
+      ]);
+    }
   };
 
   const role = user?.role ?? "student";

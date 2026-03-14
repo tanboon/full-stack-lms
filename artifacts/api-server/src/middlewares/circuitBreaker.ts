@@ -8,7 +8,7 @@ interface RateEntry {
 // [3.3] In-memory Map — no external DB, pure Node.js
 const requestMap = new Map<string, RateEntry>();
 
-const MAX_REQUESTS = 5;
+const MAX_REQUESTS = 60;
 const WINDOW_MS = 10 * 1000; // 10 seconds
 
 export const circuitBreaker = (req: Request, res: Response, next: NextFunction): void => {
