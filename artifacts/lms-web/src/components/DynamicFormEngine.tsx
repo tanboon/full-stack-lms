@@ -1,124 +1,292 @@
 import React, { useState } from 'react';
 
-export interface FormSchema {
-  type: string;
-  properties?: Record<string, FormField>;
+// [6.5] Types matching the backend's /api/exam/schema response exactly
+export interface SchemaField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'boolean' | 'select' | 'textarea' | 'object' | 'array';
+  required?: boolean;
+  placeholder?: string;
+  options?: Array<{ value: string; label: string } | string>;
+  conditionalOn?: { field: string; value: string };
+  nestedFields?: SchemaField[];    // For type: "object"
+  itemSchema?: { fields: SchemaField[] }; // For type: "array"
+  minItems?: number;
+  validation?: { min?: number; max?: number; minLength?: number };
 }
 
-export interface FormField {
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
-  label?: string;
-  required?: boolean;
-  options?: string[];
-  properties?: Record<string, FormField>; // For nested objects
-  items?: FormField; // For arrays
-  condition?: { field: string; value: any }; // [6.5] Conditional rendering
+export interface BackendSchema {
+  title?: string;
+  fields: SchemaField[];
+}
+
+// Legacy format support (for fallback)
+export interface FormSchema {
+  type: string;
+  properties?: Record<string, any>;
 }
 
 interface Props {
-  schema: FormSchema;
+  schema: BackendSchema | FormSchema;
   onSubmit: (data: any) => void;
 }
 
-// [6.5] Dynamic Form Engine processing JSON Schema
+function isBackendSchema(schema: any): schema is BackendSchema {
+  return Array.isArray(schema?.fields);
+}
+
+// ─── Single field renderer ────────────────────────────────────────────────────
+function FieldRenderer({
+  field,
+  path,
+  formData,
+  onChange,
+  parentValues,
+}: {
+  field: SchemaField;
+  path: string;
+  formData: Record<string, any>;
+  onChange: (path: string, value: any) => void;
+  parentValues: Record<string, any>;
+}) {
+  // [6.5] Conditional rendering
+  if (field.conditionalOn) {
+    const condVal = parentValues[field.conditionalOn.field];
+    if (condVal !== field.conditionalOn.value) return null;
+  }
+
+  const value = formData[field.key] ?? '';
+  const baseInputClass =
+    'w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground';
+
+  if (field.type === 'object' && field.nestedFields) {
+    return (
+      <div className="mb-5 p-5 border border-border/50 rounded-2xl bg-muted/30">
+        <h3 className="text-sm font-semibold mb-4 text-primary flex items-center gap-2">
+          <span className="w-5 h-5 rounded-md bg-primary/20 flex items-center justify-center text-xs">N</span>
+          {field.label}
+        </h3>
+        {field.nestedFields.map(nf => (
+          <FieldRenderer
+            key={nf.key}
+            field={nf}
+            path={`${path}.${nf.key}`}
+            formData={formData[field.key] ?? {}}
+            onChange={(p, v) => {
+              const newNested = { ...(formData[field.key] ?? {}), [nf.key]: v };
+              onChange(field.key, newNested);
+            }}
+            parentValues={formData[field.key] ?? {}}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (field.type === 'array' && field.itemSchema) {
+    const items: any[] = Array.isArray(formData[field.key]) ? formData[field.key] : [];
+    const addItem = () => onChange(field.key, [...items, {}]);
+    const removeItem = (idx: number) => onChange(field.key, items.filter((_, i) => i !== idx));
+    const updateItem = (idx: number, key: string, val: any) => {
+      const updated = items.map((item, i) => i === idx ? { ...item, [key]: val } : item);
+      onChange(field.key, updated);
+    };
+
+    return (
+      <div className="mb-5">
+        <label className="block text-sm font-medium mb-2 text-foreground">
+          {field.label}
+          {field.required && <span className="text-destructive ml-1">*</span>}
+        </label>
+        {items.map((item, idx) => (
+          <div key={idx} className="mb-4 p-4 border border-border rounded-2xl bg-card relative shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+                Question {idx + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeItem(idx)}
+                className="text-xs text-destructive hover:bg-destructive/10 px-2.5 py-1 rounded-lg transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+            {field.itemSchema!.fields.map(subField => (
+              <FieldRenderer
+                key={subField.key}
+                field={subField}
+                path={`${path}[${idx}].${subField.key}`}
+                formData={item}
+                onChange={(_, v) => updateItem(idx, subField.key, v)}
+                parentValues={item}
+              />
+            ))}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addItem}
+          className="w-full py-2.5 border-2 border-dashed border-primary/40 text-primary text-sm font-medium rounded-xl hover:border-primary hover:bg-primary/5 transition-all"
+        >
+          + Add Question
+        </button>
+        {field.minItems && items.length === 0 && (
+          <p className="text-xs text-destructive mt-1">At least {field.minItems} question required</p>
+        )}
+      </div>
+    );
+  }
+
+  switch (field.type) {
+    case 'select': {
+      const opts = field.options ?? [];
+      return (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1.5 text-foreground">
+            {field.label}
+            {field.required && <span className="text-destructive ml-1">*</span>}
+          </label>
+          <select
+            value={value}
+            onChange={e => onChange(field.key, e.target.value)}
+            required={field.required}
+            className={baseInputClass}
+          >
+            <option value="">{field.placeholder ?? 'Select...'}</option>
+            {opts.map((opt: any) =>
+              typeof opt === 'string'
+                ? <option key={opt} value={opt}>{opt}</option>
+                : <option key={opt.value} value={opt.value}>{opt.label}</option>
+            )}
+          </select>
+        </div>
+      );
+    }
+    case 'boolean':
+      return (
+        <div className="mb-4 flex items-center gap-3 p-3 border border-border/50 rounded-xl bg-muted/20">
+          <input
+            type="checkbox"
+            id={path}
+            checked={!!value}
+            onChange={e => onChange(field.key, e.target.checked)}
+            className="w-4 h-4 rounded text-primary border-border bg-background"
+          />
+          <label htmlFor={path} className="text-sm font-medium text-foreground cursor-pointer">{field.label}</label>
+        </div>
+      );
+    case 'textarea':
+      return (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1.5 text-foreground">
+            {field.label}
+            {field.required && <span className="text-destructive ml-1">*</span>}
+          </label>
+          <textarea
+            value={value}
+            onChange={e => onChange(field.key, e.target.value)}
+            required={field.required}
+            placeholder={field.placeholder}
+            rows={3}
+            className={`${baseInputClass} resize-none`}
+          />
+        </div>
+      );
+    case 'number':
+      return (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1.5 text-foreground">
+            {field.label}
+            {field.required && <span className="text-destructive ml-1">*</span>}
+          </label>
+          <input
+            type="number"
+            value={value}
+            onChange={e => onChange(field.key, e.target.value)}
+            required={field.required}
+            placeholder={field.placeholder}
+            min={field.validation?.min}
+            max={field.validation?.max}
+            className={baseInputClass}
+          />
+        </div>
+      );
+    default: // text
+      return (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1.5 text-foreground">
+            {field.label}
+            {field.required && <span className="text-destructive ml-1">*</span>}
+          </label>
+          <input
+            type="text"
+            value={value}
+            onChange={e => onChange(field.key, e.target.value)}
+            required={field.required}
+            placeholder={field.placeholder}
+            minLength={field.validation?.minLength}
+            className={baseInputClass}
+          />
+        </div>
+      );
+  }
+}
+
+// ─── Main DynamicFormEngine ───────────────────────────────────────────────────
 export function DynamicFormEngine({ schema, onSubmit }: Props) {
   const [formData, setFormData] = useState<Record<string, any>>({});
 
-  const handleChange = (path: string, value: any) => {
-    // Immutable nested state update (simplified for paths like "level1.level2")
-    const keys = path.split('.');
-    setFormData(prev => {
-      const newState = { ...prev };
-      let current = newState;
-      for (let i = 0; i < keys.length - 1; i++) {
-        current[keys[i]] = { ...(current[keys[i]] || {}) };
-        current = current[keys[i]];
-      }
-      current[keys[keys.length - 1]] = value;
-      return newState;
-    });
+  const handleChange = (key: string, value: any) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
   };
 
-  const getValue = (path: string) => {
-    return path.split('.').reduce((obj, key) => (obj && obj[key] !== 'undefined') ? obj[key] : undefined, formData);
-  };
-
-  const renderField = (key: string, field: FormField, path: string) => {
-    // [6.5] Conditional rendering check
-    if (field.condition) {
-      const condValue = getValue(field.condition.field);
-      if (condValue !== field.condition.value) return null;
-    }
-
-    const value = getValue(path) || '';
-
-    switch (field.type) {
-      case 'string':
-        if (field.options) {
-          return (
-            <div key={path} className="mb-4">
-              <label className="block text-sm font-medium mb-1.5 text-foreground">{field.label || key}</label>
-              <select 
-                value={value}
-                onChange={(e) => handleChange(path, e.target.value)}
-                className="w-full bg-background border border-border rounded-xl px-4 py-2.5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                required={field.required}
-              >
-                <option value="">Select option...</option>
-                {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
-            </div>
-          );
-        }
-        return (
-          <div key={path} className="mb-4">
-            <label className="block text-sm font-medium mb-1.5 text-foreground">{field.label || key}</label>
-            <input 
-              type="text" 
-              value={value}
-              onChange={(e) => handleChange(path, e.target.value)}
-              className="w-full bg-background border border-border rounded-xl px-4 py-2.5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              required={field.required}
-              placeholder={`Enter ${field.label || key}...`}
-            />
-          </div>
-        );
-      case 'boolean':
-        return (
-          <div key={path} className="mb-4 flex items-center gap-3">
-            <input 
-              type="checkbox" 
-              checked={!!value}
-              onChange={(e) => handleChange(path, e.target.checked)}
-              className="w-5 h-5 rounded text-primary border-border focus:ring-primary/20 bg-background"
-            />
-            <label className="text-sm font-medium text-foreground">{field.label || key}</label>
-          </div>
-        );
-      case 'object':
-        return (
-          <div key={path} className="mb-6 p-5 border border-border/50 rounded-2xl bg-card shadow-sm">
-            <h3 className="text-lg font-bold mb-4 text-primary">{field.label || key}</h3>
-            {Object.entries(field.properties || {}).map(([subKey, subField]) => 
-              renderField(subKey, subField, `${path}.${subKey}`)
-            )}
-          </div>
-        );
-      default:
-        return <div key={path} className="text-red-500 text-sm">Unsupported type: {field.type}</div>;
-    }
-  };
-
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-2">
-      {schema.type === 'object' && schema.properties && 
-        Object.entries(schema.properties).map(([key, field]) => renderField(key, field, key))
-      }
-      <button 
-        type="submit"
-        className="w-full py-3.5 px-4 bg-gradient-to-r from-primary to-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all active:translate-y-0 mt-6"
+  // Backend schema (fields array format)
+  if (isBackendSchema(schema)) {
+    return (
+      <form
+        onSubmit={e => { e.preventDefault(); onSubmit(formData); }}
+        className="space-y-1"
       >
-        Submit Exam Configuration
+        {schema.fields.map(field => (
+          <FieldRenderer
+            key={field.key}
+            field={field}
+            path={field.key}
+            formData={formData}
+            onChange={handleChange}
+            parentValues={formData}
+          />
+        ))}
+        <button
+          type="submit"
+          className="w-full py-3.5 px-4 bg-gradient-to-r from-primary to-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all active:translate-y-0 mt-4"
+        >
+          Create Exam
+        </button>
+      </form>
+    );
+  }
+
+  // Legacy fallback (properties object format)
+  return (
+    <form
+      onSubmit={e => { e.preventDefault(); onSubmit(formData); }}
+      className="space-y-2"
+    >
+      {schema.properties &&
+        Object.entries(schema.properties).map(([key, field]: [string, any]) => (
+          <div key={key} className="mb-4">
+            <label className="block text-sm font-medium mb-1.5">{field.label || key}</label>
+            <input
+              type={field.type === 'boolean' ? 'checkbox' : 'text'}
+              onChange={e => handleChange(key, field.type === 'boolean' ? e.target.checked : e.target.value)}
+              className="w-full border border-border rounded-xl px-4 py-2.5 focus:outline-none"
+            />
+          </div>
+        ))}
+      <button type="submit" className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl mt-4">
+        Submit
       </button>
     </form>
   );
