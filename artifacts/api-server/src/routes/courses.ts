@@ -174,6 +174,19 @@ router.post("/courses/:id/enroll", protect, async (req: any, res) => {
   }
 });
 
+// GET reviews for a course (admin/instructor can see all)
+router.get("/courses/:id/reviews", protect, async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id)
+      .populate("reviews.user", "name email role")
+      .select("title reviews averageRating");
+    if (!course) return res.status(404).json({ status: "error", message: "Course not found." });
+    res.json({ status: "success", results: course.reviews.length, data: course.reviews });
+  } catch (err: any) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
 // Add review to course
 router.post("/courses/:id/reviews", protect, async (req, res) => {
   try {
