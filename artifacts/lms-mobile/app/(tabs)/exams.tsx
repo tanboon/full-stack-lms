@@ -47,6 +47,20 @@ type ExamAnswer = {
   submittedAt: number;
   status: "Pending" | "Syncing" | "Synced" | "Failed";
   syncedAt?: number;
+  score?: number;
+  totalPoints?: number;
+  percentage?: number;
+  passed?: boolean;
+};
+
+type ScoreResult = {
+  examTitle: string;
+  score: number;
+  totalPoints: number;
+  percentage: number;
+  passed: boolean;
+  passingScore: number;
+  breakdown: { questionText: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; pointsEarned: number; pointsMax: number }[];
 };
 
 function StatusBadge({ status, colors }: { status: ExamAnswer["status"]; colors: any }) {
@@ -81,6 +95,7 @@ export default function ExamsScreen() {
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const isSyncingRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -136,14 +151,28 @@ export default function ExamsScreen() {
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers.Authorization = `Bearer ${token}`;
-        await fetch(`${API_BASE}/exams/${item.examId}/submit`, {
+        const resp = await fetch(`${API_BASE}/exams/${item.examId}/submit`, {
           method: "POST",
           headers,
           body: JSON.stringify({ answers: item.answers, submittedAt: item.submittedAt }),
         });
+        const resultJson = await resp.json();
+        const resultData = resultJson.data;
         updatedQueue = updatedQueue.map(q =>
-          q.syncId === item.syncId ? { ...q, status: "Synced" as const, syncedAt: Date.now() } : q
+          q.syncId === item.syncId ? {
+            ...q,
+            status: "Synced" as const,
+            syncedAt: Date.now(),
+            score: resultData?.score,
+            totalPoints: resultData?.totalPoints,
+            percentage: resultData?.percentage,
+            passed: resultData?.passed,
+          } : q
         );
+        // Show score modal for the most recent submission
+        if (resultData && item.syncId === pendingItems[pendingItems.length - 1].syncId) {
+          setScoreResult(resultData as ScoreResult);
+        }
       } catch {
         updatedQueue = updatedQueue.map(q =>
           q.syncId === item.syncId ? { ...q, status: "Failed" as const } : q
@@ -219,6 +248,105 @@ export default function ExamsScreen() {
       );
     }
   }, [selectedExam, answers, queue, isOnline, saveQueue, syncQueue]);
+
+  // Score result screen
+  if (scoreResult) {
+    const pct = scoreResult.percentage;
+    const passed = scoreResult.passed;
+    const passColor = passed ? "#22C55E" : "#FF5C5C";
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ScrollView
+          contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Result Hero */}
+          <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 32 }}>
+            <View style={[styles.scoreCircle, { borderColor: passColor, backgroundColor: passColor + "15" }]}>
+              <Text style={[styles.scorePercent, { color: passColor, fontFamily: "Inter_700Bold" }]}>{pct}%</Text>
+              <Text style={[{ fontSize: 12, color: passColor, fontFamily: "Inter_500Medium", marginTop: 2 }]}>
+                {passed ? "PASSED" : "FAILED"}
+              </Text>
+            </View>
+            <Text style={[{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, marginTop: 20, textAlign: "center" }]}>
+              {passed ? "Congratulations! 🎉" : "Keep Practicing"}
+            </Text>
+            <Text style={[{ fontSize: 14, color: colors.textSecondary, fontFamily: "Inter_400Regular", marginTop: 6, textAlign: "center" }]}>
+              {scoreResult.examTitle}
+            </Text>
+
+            {/* Stats Row */}
+            <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: colors.text, fontFamily: "Inter_700Bold" }]}>{scoreResult.score}/{scoreResult.totalPoints}</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Points</Text>
+              </View>
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: colors.text, fontFamily: "Inter_700Bold" }]}>{scoreResult.passingScore}%</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Required</Text>
+              </View>
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: passColor, fontFamily: "Inter_700Bold" }]}>
+                  {scoreResult.breakdown?.filter(b => b.isCorrect).length ?? 0}/{scoreResult.breakdown?.length ?? 0}
+                </Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Correct</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Question Breakdown */}
+          <View style={{ paddingHorizontal: 20, gap: 10 }}>
+            <Text style={[styles.sectionLabel, { color: colors.text, fontFamily: "Inter_700Bold", marginBottom: 4 }]}>
+              Answer Breakdown
+            </Text>
+            {(scoreResult.breakdown ?? []).map((item, idx) => (
+              <View key={idx} style={[styles.breakdownCard, {
+                backgroundColor: item.isCorrect ? "#22C55E0A" : "#FF5C5C0A",
+                borderColor: item.isCorrect ? "#22C55E30" : "#FF5C5C30",
+              }]}>
+                <View style={styles.breakdownHeader}>
+                  <Feather
+                    name={item.isCorrect ? "check-circle" : "x-circle"}
+                    size={16}
+                    color={item.isCorrect ? "#22C55E" : "#FF5C5C"}
+                  />
+                  <Text style={[styles.breakdownQ, { color: colors.text, fontFamily: "Inter_500Medium", flex: 1 }]} numberOfLines={2}>
+                    {item.questionText}
+                  </Text>
+                  <Text style={[{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: item.isCorrect ? "#22C55E" : "#FF5C5C" }]}>
+                    {item.pointsEarned}/{item.pointsMax}
+                  </Text>
+                </View>
+                {!item.isCorrect && (
+                  <View style={styles.breakdownAnswers}>
+                    <Text style={[{ fontSize: 11, color: "#FF5C5C", fontFamily: "Inter_400Regular" }]}>
+                      Your answer: {item.userAnswer || "(no answer)"}
+                    </Text>
+                    <Text style={[{ fontSize: 11, color: "#22C55E", fontFamily: "Inter_600SemiBold" }]}>
+                      Correct: {item.correctAnswer}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+
+          {/* Done Button */}
+          <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+            <Pressable
+              onPress={() => setScoreResult(null)}
+              style={[styles.submitBtn, { backgroundColor: passColor }]}
+            >
+              <Feather name="check" size={18} color="#fff" />
+              <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>Done</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   // Exam form view
   if (selectedExam) {
@@ -486,9 +614,15 @@ export default function ExamsScreen() {
                 <Text style={[styles.queueTime, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
                   {new Date(item.submittedAt).toLocaleString()}
                 </Text>
-                <Text style={[styles.queueAnswers, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                  {Object.keys(item.answers).length} answer{Object.keys(item.answers).length !== 1 ? "s" : ""} recorded
-                </Text>
+                {item.status === "Synced" && item.percentage !== undefined ? (
+                  <Text style={[{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: item.passed ? "#22C55E" : "#FF5C5C" }]}>
+                    Score: {item.score}/{item.totalPoints} ({item.percentage}%) — {item.passed ? "Passed" : "Failed"}
+                  </Text>
+                ) : (
+                  <Text style={[styles.queueAnswers, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                    {Object.keys(item.answers).length} answer{Object.keys(item.answers).length !== 1 ? "s" : ""} recorded
+                  </Text>
+                )}
               </View>
               <StatusBadge status={item.status} colors={colors} />
             </View>
@@ -583,4 +717,22 @@ const styles = StyleSheet.create({
     shadowColor: "#6C63FF", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4,
   },
   submitText: { color: "#fff", fontSize: 16 },
+  // Score result styles
+  scoreCircle: {
+    width: 140, height: 140, borderRadius: 70, borderWidth: 4,
+    justifyContent: "center", alignItems: "center",
+  },
+  scorePercent: { fontSize: 38 },
+  statsRow: {
+    flexDirection: "row", borderRadius: 16, borderWidth: 1,
+    padding: 16, marginTop: 24, width: "100%",
+  },
+  statItem: { flex: 1, alignItems: "center", gap: 4 },
+  statValue: { fontSize: 18 },
+  statLabel: { fontSize: 11 },
+  statDivider: { width: 1, marginHorizontal: 8 },
+  breakdownCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 6 },
+  breakdownHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  breakdownQ: { fontSize: 13, lineHeight: 18 },
+  breakdownAnswers: { paddingLeft: 24, gap: 3 },
 });

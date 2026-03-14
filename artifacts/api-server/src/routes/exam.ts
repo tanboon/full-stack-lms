@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "../middlewares/protect.js";
 import { restrictTo } from "../middlewares/restrictTo.js";
 import { Exam } from "../models/Exam.js";
+import { ExamSubmission } from "../models/ExamSubmission.js";
 import Course from "../models/Course.js";
 
 const router = Router();
@@ -162,21 +163,96 @@ router.post("/exams", protect, restrictTo("admin", "instructor"), async (req: an
   }
 });
 
-// POST /api/exams/:id/submit — mobile offline FIFO queue sync target [7.5]
+// POST /api/exams/:id/submit — grades exam, saves submission, returns score [7.5]
 router.post("/exams/:id/submit", protect, async (req: any, res) => {
   try {
     const exam = await Exam.findById(req.params.id).lean();
     if (!exam) return res.status(404).json({ status: "error", message: "Exam not found" });
+
+    const rawAnswers: Record<string, string> = req.body.answers ?? {};
+
+    // Grade each question
+    let score = 0;
+    let totalPoints = 0;
+    const breakdown = exam.questions.map((q: any) => {
+      const qId = String(q._id);
+      const userAnswer = (rawAnswers[qId] ?? "").trim().toLowerCase();
+      const correct = (q.correctAnswer ?? "").trim().toLowerCase();
+      const isCorrect = q.type === "short"
+        ? userAnswer === correct  // exact match for short answer
+        : userAnswer === correct;
+      const pointsEarned = isCorrect ? q.points : 0;
+      totalPoints += q.points;
+      score += pointsEarned;
+      return {
+        questionId: qId,
+        questionText: q.text,
+        userAnswer: rawAnswers[qId] ?? "(no answer)",
+        correctAnswer: q.correctAnswer,
+        isCorrect,
+        pointsEarned,
+        pointsMax: q.points,
+      };
+    });
+
+    const percentage = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
+    const passed = percentage >= (exam.passingScore ?? 0);
+
+    // Persist submission
+    const submission = await ExamSubmission.create({
+      examId: exam._id,
+      examTitle: exam.examTitle,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      answers: rawAnswers,
+      score,
+      totalPoints,
+      percentage,
+      passed,
+      breakdown,
+    });
+
     res.json({
       status: "success",
-      message: "Submission received",
+      message: passed ? "Exam passed! 🎉" : "Exam submitted. Better luck next time!",
       data: {
-        examId: req.params.id,
-        userId: req.user._id,
-        answersCount: Object.keys(req.body.answers ?? {}).length,
-        receivedAt: new Date().toISOString(),
+        submissionId: submission._id,
+        examTitle: exam.examTitle,
+        score,
+        totalPoints,
+        percentage,
+        passed,
+        passingScore: exam.passingScore,
+        breakdown,
       },
     });
+  } catch (err: any) {
+    res.status(400).json({ status: "error", message: err.message });
+  }
+});
+
+// GET /api/exams/:id/submissions — instructor/admin view of all student results
+router.get("/exams/:id/submissions", protect, restrictTo("admin", "instructor"), async (req, res) => {
+  try {
+    const submissions = await ExamSubmission
+      .find({ examId: req.params.id })
+      .sort({ submittedAt: -1 })
+      .lean();
+    res.json({ status: "success", results: submissions.length, data: submissions });
+  } catch (err: any) {
+    res.status(400).json({ status: "error", message: err.message });
+  }
+});
+
+// GET /api/submissions — all submissions across exams (admin)
+router.get("/submissions", protect, restrictTo("admin", "instructor"), async (_req, res) => {
+  try {
+    const submissions = await ExamSubmission
+      .find({})
+      .sort({ submittedAt: -1 })
+      .lean();
+    res.json({ status: "success", results: submissions.length, data: submissions });
   } catch (err: any) {
     res.status(400).json({ status: "error", message: err.message });
   }

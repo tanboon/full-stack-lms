@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/axios';
 import { useSearchParams, Link } from 'react-router-dom';
-import { useCartStore } from '@/store/cartStore';
 import { toast } from 'sonner';
-import { Search, Filter, Trash2, Plus, ShoppingCart, PlayCircle } from 'lucide-react';
+import { Search, Filter, Trash2, Plus, PlayCircle, Users, BarChart2 } from 'lucide-react';
 
 export default function Courses() {
   const [courses, setCourses] = useState<any[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
-  const addItemToCart = useCartStore(state => state.addItem);
 
   // Sync state with URL [2.5]
   const tagFilter = searchParams.get('tags') || '';
@@ -145,13 +143,13 @@ export default function Courses() {
                 </div>
                 
                 <div className="flex gap-2">
-                  <button 
-                    onClick={() => addItemToCart({ id: course._id, title: course.title, price: course.salePrice || course.price })}
+                  <Link
+                    to={`/courses/${course._id}`}
                     className="p-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
-                    title="Add to Cart"
+                    title="View Details & Enrollments"
                   >
-                    <ShoppingCart className="w-4 h-4" />
-                  </button>
+                    <BarChart2 className="w-4 h-4" />
+                  </Link>
                   <button 
                     onClick={() => handleDelete(course._id)}
                     className="p-2 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive hover:text-white transition-colors"

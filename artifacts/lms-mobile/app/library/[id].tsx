@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  useColorScheme, Share, Animated,
+  useColorScheme, ActivityIndicator, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -9,146 +9,310 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
+import { useAuth, API_BASE } from "@/contexts/AuthContext";
 
-// [7.3] Deep-Link Library Explorer — useLocalSearchParams, callback to sync Favorite back
+// [7.3] Deep-Link Library Explorer — useLocalSearchParams, real course data from API
 
 const FAVORITES_KEY = "library_favorites";
 
-const MATERIAL_DETAILS: Record<string, any> = {
-  "1": { title: "Introduction to Distributed Systems", author: "Prof. Smith", subject: "CS", type: "Article", readTime: "15 min", tags: ["Distributed", "Cloud", "CAP Theorem"], description: "This article covers the fundamentals of distributed systems including consistency, availability, and partition tolerance. We explore the CAP theorem in depth, examining real-world trade-offs made by systems like Cassandra, DynamoDB, and Zookeeper.", highlights: ["CAP Theorem explained", "ACID vs BASE", "Consensus algorithms", "Leader election patterns"] },
-  "2": { title: "Advanced MongoDB Aggregation Pipelines", author: "Dr. Lee", subject: "CS", type: "PDF", readTime: "30 min", tags: ["MongoDB", "NoSQL", "Database"], description: "Deep dive into MongoDB's aggregation framework — from $match and $group to advanced stages like $facet, $lookup, and $graphLookup. Covers performance optimization with explain plans.", highlights: ["$lookup joins", "$facet multi-facet aggregations", "Index strategies", "Pipeline optimization"] },
-  "3": { title: "React Native Performance Optimization", author: "Prof. Chen", subject: "CS", type: "Video", readTime: "45 min", tags: ["React Native", "Mobile", "Performance"], description: "Practical techniques to optimize React Native apps: using Hermes engine, Reanimated 3, FlatList optimization, and memoization patterns. Covers New Architecture and JSI.", highlights: ["Reanimated 3 worklets", "Hermes engine setup", "FlatList vs FlashList", "useMemo/useCallback patterns"] },
-  "4": { title: "Linear Algebra for ML", author: "Dr. Wilson", subject: "Math", type: "Book", readTime: "2 hrs", tags: ["Matrices", "Eigenvalues", "ML"], description: "Essential linear algebra concepts for machine learning: vectors, matrices, determinants, eigenvalues, and singular value decomposition. Each concept illustrated with Python code.", highlights: ["SVD decomposition", "PCA foundations", "Matrix factorization", "Gradient descent geometry"] },
-  "5": { title: "Graph Neural Networks Survey", author: "Prof. Wang", subject: "Data Science", type: "PDF", readTime: "1 hr", tags: ["GNN", "Deep Learning", "Graphs"], description: "Comprehensive survey of graph neural network architectures including GCN, GAT, GraphSAGE, and more. Applications in social networks, molecular biology, and recommendation systems.", highlights: ["Message passing framework", "Attention mechanisms", "Scalability challenges", "Benchmark datasets"] },
-  "6": { title: "TCP/IP Stack Deep Dive", author: "Dr. Brown", subject: "Networks", type: "Article", readTime: "25 min", tags: ["Networking", "Protocols", "OSI"], description: "From physical layer to application layer — how data packets travel across the internet. Covers TCP handshakes, UDP trade-offs, congestion control, and modern QUIC protocol.", highlights: ["3-way handshake", "Congestion control algorithms", "HTTP/3 and QUIC", "NAT traversal"] },
-  "7": { title: "Quantum Computing Basics", author: "Prof. Kim", subject: "Physics", type: "Video", readTime: "50 min", tags: ["Quantum", "Qubits", "Algorithms"], description: "Introduction to quantum computing: superposition, entanglement, quantum gates, and algorithms. Covers Shor's factoring algorithm and Grover's search algorithm.", highlights: ["Qubit superposition", "Quantum entanglement", "Grover's algorithm", "Quantum error correction"] },
-  "8": { title: "Docker & Kubernetes in Production", author: "Dr. Martinez", subject: "CS", type: "Book", readTime: "3 hrs", tags: ["DevOps", "Containers", "K8s"], description: "Production-grade container orchestration with Kubernetes. Covers deployment strategies, service meshes, monitoring, auto-scaling, and disaster recovery.", highlights: ["Rolling deployments", "Horizontal Pod Autoscaler", "Service mesh with Istio", "GitOps workflows"] },
+const LEVEL_COLOR: Record<string, string> = {
+  beginner: "#22C55E",
+  intermediate: "#F7B731",
+  advanced: "#FF5C5C",
 };
 
-const TYPE_COLORS: Record<string, string> = {
-  Article: "#6C63FF",
-  Video: "#FF5C5C",
-  PDF: "#00D4AA",
-  Book: "#F7B731",
+const CATEGORY_LABELS: Record<string, string> = {
+  "web-dev": "Web Development",
+  "mobile-dev": "Mobile Development",
+  "data-science": "Data Science",
+  "design": "Design",
+  "business": "Business",
+  "other": "Other",
 };
 
-export default function MaterialDetailScreen() {
+export default function CourseDetailScreen() {
   const { id, isFavorite: initialFav } = useLocalSearchParams<{ id: string; isFavorite: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = Colors[isDark ? "dark" : "light"];
   const insets = useSafeAreaInsets();
+  const { token } = useAuth();
+
+  const [course, setCourse] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(initialFav === "true");
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const [isEnrolling, setIsEnrolling] = useState(false);
+  const [enrolled, setEnrolled] = useState(false);
 
-  const material = MATERIAL_DETAILS[id ?? "1"] ?? MATERIAL_DETAILS["1"];
-  const typeColor = TYPE_COLORS[material.type] || "#6C63FF";
+  // Load course from API
+  const loadCourse = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/courses/${id}`, { headers });
+      const json = await res.json();
+      if (json.status === "success") {
+        setCourse(json.data);
+      } else {
+        setError("Could not load course details.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, token]);
 
-  // Animate heart on toggle
-  const animateHeart = useCallback(() => {
-    Animated.sequence([
-      Animated.spring(scaleAnim, { toValue: 1.4, useNativeDriver: false, tension: 300 }),
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: false, tension: 300 }),
-    ]).start();
-  }, [scaleAnim]);
+  useEffect(() => { loadCourse(); }, [loadCourse]);
 
-  // Toggle favorite and sync back to library list via AsyncStorage [7.3]
+  // Persist favorite to AsyncStorage [7.3]
   const toggleFavorite = useCallback(async () => {
+    if (!id) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    animateHeart();
     const newFav = !isFavorite;
     setIsFavorite(newFav);
-    // Persist
     const json = await AsyncStorage.getItem(FAVORITES_KEY);
     const favIds: string[] = json ? JSON.parse(json) : [];
-    const updated = newFav ? [...new Set([...favIds, id])] : favIds.filter(f => f !== id);
+    const updated = newFav ? [...new Set([...favIds, id])] : favIds.filter((f: string) => f !== id);
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
-  }, [isFavorite, id, animateHeart]);
+  }, [isFavorite, id]);
+
+  const handleEnroll = useCallback(async () => {
+    if (!id || !token) {
+      Alert.alert("Sign In Required", "Please log in to enroll in courses.");
+      return;
+    }
+    setIsEnrolling(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const res = await fetch(`${API_BASE}/courses/${id}/enroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (res.ok && json.status === "success") {
+        setEnrolled(true);
+        // Update local seat count
+        if (course) setCourse((c: any) => ({ ...c, enrolledCount: (c.enrolledCount ?? 0) + 1, seats: Math.max(0, (c.seats ?? 0) - 1) }));
+        Alert.alert("Enrolled!", `You are now enrolled in "${course?.title ?? "this course"}".`);
+      } else {
+        Alert.alert("Enrollment Failed", json.message ?? "Could not enroll. The course may be full.");
+      }
+    } catch {
+      Alert.alert("Error", "Network error. Please try again.");
+    } finally {
+      setIsEnrolling(false);
+    }
+  }, [id, token, course]);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[{ color: colors.textSecondary, fontFamily: "Inter_400Regular", marginTop: 12 }]}>
+          Loading course...
+        </Text>
+      </View>
+    );
+  }
+
+  if (error || !course) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <Feather name="alert-circle" size={40} color="#FF5C5C" />
+        <Text style={[{ color: colors.text, fontFamily: "Inter_600SemiBold", marginTop: 12, fontSize: 16 }]}>
+          {error ?? "Course not found"}
+        </Text>
+        <Pressable onPress={() => router.back()} style={[styles.backPill, { borderColor: colors.border }]}>
+          <Feather name="arrow-left" size={14} color={colors.textSecondary} />
+          <Text style={[{ color: colors.textSecondary, fontFamily: "Inter_500Medium", fontSize: 13 }]}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const levelColor = LEVEL_COLOR[course.level] ?? "#6C63FF";
+  const saleActive = course.discount > 0 && course.salePrice;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
-        <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
-          style={[styles.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-        >
-          <Feather name="arrow-left" size={20} color={colors.text} />
-        </Pressable>
-        <Text style={[styles.headerLabel, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Reading Material</Text>
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <Pressable
-            onPress={toggleFavorite}
-            style={[styles.favBtn, { backgroundColor: isFavorite ? "#FF5C5C18" : colors.card, borderColor: isFavorite ? "#FF5C5C40" : colors.border }]}
-          >
-            <Feather name="heart" size={20} color={isFavorite ? "#FF5C5C" : colors.textSecondary} />
-          </Pressable>
-        </Animated.View>
-      </View>
-
       <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
       >
-        {/* Hero */}
-        <View style={[styles.hero, { backgroundColor: typeColor + "15" }]}>
-          <View style={[styles.typeIconLarge, { backgroundColor: typeColor + "25" }]}>
-            <Feather name={material.type === "Video" ? "play-circle" : material.type === "PDF" ? "book" : "file-text"} size={40} color={typeColor} />
-          </View>
-          <View style={[styles.typeBadge, { backgroundColor: typeColor }]}>
-            <Text style={[styles.typeBadgeText, { fontFamily: "Inter_600SemiBold" }]}>{material.type}</Text>
+        {/* Hero Banner */}
+        <View style={[styles.hero, { paddingTop: insets.top + 16 }]}>
+          <View style={styles.heroContent}>
+            {/* Back + Favorite */}
+            <View style={styles.heroNav}>
+              <Pressable
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
+                style={[styles.iconBtn, { backgroundColor: "rgba(255,255,255,0.15)" }]}
+              >
+                <Feather name="arrow-left" size={20} color="#fff" />
+              </Pressable>
+              <Pressable
+                onPress={toggleFavorite}
+                style={[styles.iconBtn, { backgroundColor: "rgba(255,255,255,0.15)" }]}
+              >
+                <Feather name={isFavorite ? "heart" : "heart"} size={20} color={isFavorite ? "#FF5C5C" : "#fff"} />
+              </Pressable>
+            </View>
+
+            {/* Level + Category */}
+            <View style={styles.heroBadges}>
+              <View style={[styles.badge, { backgroundColor: levelColor + "30", borderColor: levelColor + "60" }]}>
+                <Text style={[styles.badgeText, { color: "#fff" }]}>{course.level?.toUpperCase()}</Text>
+              </View>
+              {course.category && (
+                <View style={[styles.badge, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+                  <Text style={[styles.badgeText, { color: "#fff" }]}>{CATEGORY_LABELS[course.category] ?? course.category}</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={[styles.heroTitle, { fontFamily: "Inter_700Bold" }]}>{course.title}</Text>
+
+            {/* Instructor */}
+            <View style={styles.instructorRow}>
+              <View style={[styles.avatarSmall, { backgroundColor: "rgba(255,255,255,0.3)" }]}>
+                <Feather name="user" size={12} color="#fff" />
+              </View>
+              <Text style={[styles.instructorName, { fontFamily: "Inter_500Medium" }]}>
+                {course.instructorName ?? "University Instructor"}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={{ paddingHorizontal: 20, paddingTop: 24, gap: 16 }}>
-          <Text style={[styles.title, { color: colors.text, fontFamily: "Inter_700Bold" }]}>{material.title}</Text>
-          <View style={styles.metaRow}>
-            <Feather name="user" size={14} color={colors.textSecondary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{material.author}</Text>
-            <View style={[styles.dot, { backgroundColor: colors.border }]} />
-            <Feather name="clock" size={14} color={colors.textSecondary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{material.readTime}</Text>
-            <View style={[styles.dot, { backgroundColor: colors.border }]} />
-            <Text style={[styles.metaText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>{material.subject}</Text>
+        {/* Price + Enroll */}
+        <View style={[styles.priceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.priceRow}>
+            <View>
+              {saleActive ? (
+                <>
+                  <Text style={[styles.originalPrice, { color: colors.textSecondary }]}>${course.price}</Text>
+                  <Text style={[styles.salePrice, { color: "#22C55E", fontFamily: "Inter_700Bold" }]}>${course.salePrice}</Text>
+                </>
+              ) : (
+                <Text style={[styles.salePrice, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+                  {course.price === 0 ? "Free" : `$${course.price}`}
+                </Text>
+              )}
+              {saleActive && (
+                <View style={styles.discountTag}>
+                  <Text style={[styles.discountText, { fontFamily: "Inter_700Bold" }]}>{course.discount}% OFF</Text>
+                </View>
+              )}
+            </View>
+            <Pressable
+              onPress={enrolled ? undefined : handleEnroll}
+              disabled={isEnrolling || enrolled || course.seats === 0}
+              style={[
+                styles.enrollBtn,
+                {
+                  backgroundColor: enrolled ? "#22C55E" : course.seats === 0 ? colors.border : colors.primary,
+                  opacity: isEnrolling ? 0.7 : 1,
+                }
+              ]}
+            >
+              {isEnrolling ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Feather name={enrolled ? "check" : "user-plus"} size={16} color="#fff" />
+                  <Text style={[styles.enrollText, { fontFamily: "Inter_700Bold" }]}>
+                    {enrolled ? "Enrolled" : course.seats === 0 ? "Full" : "Enroll Now"}
+                  </Text>
+                </>
+              )}
+            </Pressable>
           </View>
 
-          {/* Tags */}
-          <View style={styles.tagsRow}>
-            {material.tags.map((tag: string) => (
-              <View key={tag} style={[styles.tag, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.tagText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>#{tag}</Text>
-              </View>
-            ))}
+          {/* Quick stats */}
+          <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
+            <View style={styles.statItem}>
+              <Feather name="users" size={14} color={colors.textSecondary} />
+              <Text style={[styles.statValue, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>
+                {course.enrolledCount ?? 0}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Enrolled</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.statItem}>
+              <Feather name="star" size={14} color="#F7B731" />
+              <Text style={[styles.statValue, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>
+                {course.rating?.toFixed(1) ?? "N/A"}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Rating</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.statItem}>
+              <Feather name="database" size={14} color={colors.textSecondary} />
+              <Text style={[styles.statValue, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>
+                {course.seats ?? "∞"}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Seats Left</Text>
+            </View>
           </View>
+        </View>
 
-          {/* Description */}
-          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>Overview</Text>
-            <Text style={[styles.description, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{material.description}</Text>
+        {/* Description */}
+        <View style={[styles.section, { borderTopColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>About This Course</Text>
+          <Text style={[styles.descText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            {course.description || "No description provided."}
+          </Text>
+        </View>
+
+        {/* Tags */}
+        {course.tags?.length > 0 && (
+          <View style={[styles.section, { borderTopColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>Topics</Text>
+            <View style={styles.tagsRow}>
+              {course.tags.map((tag: string) => (
+                <View key={tag} style={[styles.tagChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}>
+                  <Text style={[styles.tagText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>{tag}</Text>
+                </View>
+              ))}
+            </View>
           </View>
+        )}
 
-          {/* Key Highlights */}
-          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>Key Topics</Text>
-            {material.highlights.map((h: string, i: number) => (
-              <View key={i} style={styles.highlightRow}>
-                <View style={[styles.bullet, { backgroundColor: typeColor }]} />
-                <Text style={[styles.highlightText, { color: colors.text, fontFamily: "Inter_400Regular" }]}>{h}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* CTA */}
-          <Pressable
-            style={({ pressed }) => [styles.readBtn, { backgroundColor: typeColor, opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }]}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
-          >
-            <Feather name={material.type === "Video" ? "play" : "book-open"} size={18} color="#fff" />
-            <Text style={[styles.readBtnText, { fontFamily: "Inter_600SemiBold" }]}>
-              {material.type === "Video" ? "Watch Now" : "Read Now"}
+        {/* Reviews Preview */}
+        {course.reviews?.length > 0 && (
+          <View style={[styles.section, { borderTopColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+              Reviews ({course.reviews.length})
             </Text>
-          </Pressable>
-        </View>
+            {course.reviews.slice(0, 3).map((review: any, idx: number) => (
+              <View key={idx} style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.reviewHeader}>
+                  <View style={[styles.avatarSmall, { backgroundColor: colors.primary + "20" }]}>
+                    <Feather name="user" size={12} color={colors.primary} />
+                  </View>
+                  <Text style={[{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }]}>
+                    {review.userName ?? "Student"}
+                  </Text>
+                  <View style={styles.stars}>
+                    {[1,2,3,4,5].map(s => (
+                      <Feather key={s} name="star" size={11} color={s <= (review.rating ?? 5) ? "#F7B731" : colors.border} />
+                    ))}
+                  </View>
+                </View>
+                {review.comment && (
+                  <Text style={[{ fontSize: 13, color: colors.textSecondary, fontFamily: "Inter_400Regular", lineHeight: 18 }]}>
+                    {review.comment}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -156,35 +320,52 @@ export default function MaterialDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1,
+  centered: { justifyContent: "center", alignItems: "center", gap: 8 },
+  backPill: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 16, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
+  hero: {
+    minHeight: 240,
+    backgroundColor: "#6C63FF",
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    justifyContent: "flex-end",
   },
-  backBtn: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1 },
-  headerLabel: { fontSize: 14 },
-  favBtn: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1 },
-  hero: { alignItems: "center", paddingVertical: 40, gap: 16 },
-  typeIconLarge: { width: 90, height: 90, borderRadius: 24, justifyContent: "center", alignItems: "center" },
-  typeBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
-  typeBadgeText: { color: "#fff", fontSize: 13 },
-  title: { fontSize: 22, lineHeight: 30 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  metaText: { fontSize: 13 },
-  dot: { width: 4, height: 4, borderRadius: 2 },
+  heroContent: { gap: 10 },
+  heroNav: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
+  iconBtn: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  heroBadges: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: "transparent" },
+  badgeText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
+  heroTitle: { fontSize: 22, color: "#fff", lineHeight: 30 },
+  instructorRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  avatarSmall: { width: 22, height: 22, borderRadius: 11, justifyContent: "center", alignItems: "center" },
+  instructorName: { fontSize: 13, color: "rgba(255,255,255,0.85)" },
+  priceCard: {
+    margin: 20, borderRadius: 20, borderWidth: 1, padding: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 3,
+  },
+  priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  originalPrice: { fontSize: 13, textDecorationLine: "line-through" },
+  salePrice: { fontSize: 26 },
+  discountTag: { marginTop: 4, backgroundColor: "#22C55E20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: "flex-start" },
+  discountText: { fontSize: 11, color: "#22C55E" },
+  enrollBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14,
+    shadowColor: "#6C63FF", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
+  },
+  enrollText: { color: "#fff", fontSize: 15 },
+  statsRow: { flexDirection: "row", borderTopWidth: 1, paddingTop: 14 },
+  statItem: { flex: 1, alignItems: "center", gap: 4 },
+  statValue: { fontSize: 16 },
+  statLabel: { fontSize: 11 },
+  statDivider: { width: 1, marginHorizontal: 4 },
+  section: { paddingHorizontal: 20, paddingVertical: 20, borderTopWidth: 1, gap: 10 },
+  sectionTitle: { fontSize: 17 },
+  descText: { fontSize: 14, lineHeight: 22 },
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  tagChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   tagText: { fontSize: 12 },
-  section: { borderRadius: 16, padding: 16, gap: 10, borderWidth: 1 },
-  sectionTitle: { fontSize: 16, marginBottom: 4 },
-  description: { fontSize: 14, lineHeight: 22 },
-  highlightRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  bullet: { width: 6, height: 6, borderRadius: 3 },
-  highlightText: { fontSize: 14, flex: 1 },
-  readBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    paddingVertical: 16, borderRadius: 16,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
-  },
-  readBtnText: { color: "#fff", fontSize: 16 },
+  reviewCard: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
+  reviewHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  stars: { flexDirection: "row", gap: 2, marginLeft: "auto" },
 });

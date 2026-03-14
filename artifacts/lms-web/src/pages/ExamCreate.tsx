@@ -11,6 +11,11 @@ export default function ExamCreate() {
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'exams' | 'results'>('exams');
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [expandedExam, setExpandedExam] = useState<string | null>(null);
+  const [examSubmissions, setExamSubmissions] = useState<Record<string, any[]>>({});
 
   // Fetch schema (public) and exams (protected) simultaneously
   useEffect(() => {
@@ -34,6 +39,33 @@ export default function ExamCreate() {
       const res = await api.get('/exams');
       setExams(res.data.data ?? []);
     } catch {}
+  };
+
+  const loadAllSubmissions = async () => {
+    setSubmissionsLoading(true);
+    try {
+      const res = await api.get('/submissions');
+      setSubmissions(res.data.data ?? []);
+    } catch {
+      toast.error('Failed to load submissions.');
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  };
+
+  const loadExamSubmissions = async (examId: string) => {
+    if (examSubmissions[examId]) return;
+    try {
+      const res = await api.get(`/exams/${examId}/submissions`);
+      setExamSubmissions(prev => ({ ...prev, [examId]: res.data.data ?? [] }));
+    } catch {
+      toast.error('Failed to load submissions for this exam.');
+    }
+  };
+
+  const handleTabChange = (tab: 'exams' | 'results') => {
+    setActiveTab(tab);
+    if (tab === 'results' && submissions.length === 0) loadAllSubmissions();
   };
 
   const handleSubmit = async (data: any) => {
@@ -98,6 +130,23 @@ export default function ExamCreate() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 bg-muted p-1 rounded-xl w-fit">
+        {(['exams', 'results'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => handleTabChange(tab)}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${
+              activeTab === tab
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {tab === 'exams' ? `Exams (${exams.length})` : `Student Results (${submissions.length})`}
+          </button>
+        ))}
+      </div>
+
       {/* Create Form (schema-driven) */}
       {showForm && (
         schema ? (
@@ -135,7 +184,120 @@ export default function ExamCreate() {
         )
       )}
 
-      {/* Exams List */}
+      {/* Results Tab */}
+      {activeTab === 'results' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Student Results
+              <span className="text-sm font-normal text-muted-foreground">({submissions.length} submissions)</span>
+            </h2>
+            <button onClick={loadAllSubmissions} disabled={submissionsLoading}
+              className="text-xs text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+              <svg className={`w-3.5 h-3.5 ${submissionsLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
+
+          {submissionsLoading ? (
+            <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              Loading submissions...
+            </div>
+          ) : submissions.length === 0 ? (
+            <div className="text-center py-16 border-2 border-dashed border-border rounded-3xl text-muted-foreground">
+              <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <p className="font-medium">No submissions yet</p>
+              <p className="text-sm mt-1">Students submit exams through the mobile app</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {submissions.map(sub => (
+                <div key={sub._id} className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm ${
+                      sub.passed ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-red-500/10 text-red-500'
+                    }`}>
+                      {sub.percentage}%
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-foreground">{sub.userName}</span>
+                        <span className="text-xs text-muted-foreground">{sub.userEmail}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                          sub.passed ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-red-500/10 text-red-500'
+                        }`}>
+                          {sub.passed ? 'PASSED' : 'FAILED'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-0.5 truncate">{sub.examTitle}</p>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                        <span>Score: <strong className="text-foreground">{sub.score}/{sub.totalPoints}</strong></span>
+                        <span>Passing: {sub.passingScore ?? '—'}%</span>
+                        <span>{new Date(sub.submittedAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setExpandedExam(expandedExam === sub._id ? null : sub._id)}
+                      className="text-xs text-primary hover:bg-primary/10 px-2.5 py-1.5 rounded-lg transition-colors shrink-0"
+                    >
+                      {expandedExam === sub._id ? 'Hide' : 'Breakdown'}
+                    </button>
+                  </div>
+
+                  {/* Score bar */}
+                  <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-2 rounded-full transition-all ${sub.passed ? 'bg-green-500' : 'bg-red-500'}`}
+                      style={{ width: `${sub.percentage}%` }}
+                    />
+                  </div>
+
+                  {/* Breakdown expandable */}
+                  {expandedExam === sub._id && (
+                    <div className="mt-4 space-y-2 border-t border-border pt-4">
+                      {(sub.breakdown ?? []).map((b: any, i: number) => (
+                        <div key={i} className={`flex items-start gap-3 p-2.5 rounded-xl text-sm ${
+                          b.isCorrect ? 'bg-green-500/5 border border-green-500/20' : 'bg-red-500/5 border border-red-500/20'
+                        }`}>
+                          <span className={`mt-0.5 shrink-0 ${b.isCorrect ? 'text-green-500' : 'text-red-500'}`}>
+                            {b.isCorrect ? '✓' : '✗'}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-foreground line-clamp-1">{b.questionText}</p>
+                            {!b.isCorrect && (
+                              <div className="text-xs text-muted-foreground mt-0.5 space-y-0.5">
+                                <span className="text-red-500">Given: {b.userAnswer || '(no answer)'}</span>
+                                {' · '}
+                                <span className="text-green-600 dark:text-green-400">Correct: {b.correctAnswer}</span>
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-xs font-semibold shrink-0 ${b.isCorrect ? 'text-green-500' : 'text-muted-foreground'}`}>
+                            {b.pointsEarned}/{b.pointsMax}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'exams' && (
       <div>
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,8 +356,10 @@ export default function ExamCreate() {
         )}
       </div>
 
+      )}
+
       {/* Schema preview */}
-      {schema && (
+      {activeTab === 'exams' && schema && (
         <details className="group">
           <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 select-none">
             <svg className="w-4 h-4 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
