@@ -75,9 +75,16 @@ export default function DashboardScreen() {
       const all: Course[] = json.data ?? json.courses ?? [];
       setCourses(all);
 
-      // Filter to enrolled only
+      // Filter to enrolled only — also prune stale IDs that no longer exist in API
       if (ids.length > 0) {
-        setEnrolledCourses(all.filter(c => ids.includes(c._id)));
+        const validCourses = all.filter(c => ids.includes(c._id));
+        setEnrolledCourses(validCourses);
+        // Sync AsyncStorage: remove any IDs that don't match real courses
+        const validIds = validCourses.map(c => c._id);
+        if (validIds.length !== ids.length) {
+          await AsyncStorage.setItem(ENROLLED_KEY, JSON.stringify(validIds));
+          setEnrolledIds(validIds);
+        }
       } else {
         setEnrolledCourses([]);
       }
@@ -147,7 +154,7 @@ export default function DashboardScreen() {
             <Feather name="book-open" size={18} color="#6C63FF" />
           </View>
           <Text style={[styles.statNum, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
-            {enrolledIds.length}
+            {enrolledCourses.length}
           </Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
             Enrolled
