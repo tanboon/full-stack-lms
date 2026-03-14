@@ -1,0 +1,54 @@
+--------------------------------------------------------------------------------
+Act as an Expert Full-Stack Developer (MERN Stack & React Native). I have a massive university final project with a strict 35-item checklist that MUST be implemented exactly as required. 
+
+PROJECT OVERVIEW:
+An E-Learning System (LMS) divided into two main parts:
+1. Web Application (React, Vite, TailwindCSS) for Admins and Instructors to manage courses, upload materials, and create dynamic exams.
+2. Mobile Application (React Native) for Students to view courses, take exams, and sync data offline.
+3. Backend (Node.js, Express, MongoDB) handling API, robust security, and database operations.
+
+STRICT INSTRUCTION FOR BOLT.NEW:
+Do NOT build everything at once. We will build this iteratively. Please acknowledge this prompt first, and outline how you will structure the `/server`, `/web`, and `/mobile` directories. I will command you to proceed phase by phase. 
+
+Below is the mapping of my E-Learning features strictly tied to my university's 35 functional requirements. You MUST implement the specific technical constraints for each function when we build them.
+
+=== PHASE 1: BACKEND CORE & SECURITY (Node.js, Express, MongoDB) ===
+[Function 3.1] Setup Node.js with CORS, Morgan logger, and parse Query Parameters correctly.
+[Function 3.2] Build an Interactive Real-time Health Monitoring API (`/health`) showing `process.uptime()` and `process.memoryUsage()` converted to MB.
+[Function 3.3] Circuit Breaker Middleware: Rate limit API calls (e.g., max 5 requests per 10s per IP) using Node.js in-memory Map (no external DB for this). Return Status 429.
+[Function 3.4] Secure File Vault Streamer: For streaming course videos. Must use `fs.createReadStream().pipe(res)`. RAM usage must not exceed 20MB. Require specific `User-Agent` header.
+[Function 3.5] Dynamic API Gateway: Fetch external API data (e.g., dummy user data) using `axios`/`fetch`, transform the JSON (flatten it), and inject `X-Powered-By` headers.
+[Function 4.1] Secure Inventory (CRUD) for "Courses": Mongoose Schema with validation (required, min, enum). 
+[Function 4.2] Soft Delete & Activity Tracking: For "Users" or "Courses". Use `isDeleted: Boolean` and `deletedAt: Date`. Prevent soft-deleted items from appearing in standard GET requests.
+[Function 4.3] Atomic Stock Management: For "Course Enrollment/Seats". Use Mongoose `$inc` and `findOneAndUpdate` to prevent overselling seats. Include Transaction logic.
+[Function 4.4] Multi-Tag Search & Pagination: For searching courses. Must use MongoDB `$all` operator for tags array. Include skip/limit logic and return totalPages metadata.
+[Function 4.5] Smart Discount Engine (Aggregation): Use Mongoose Virtuals for `salePrice` and Aggregation Pipeline (`$group`, `$avg`) to calculate average course scores and sales statistics.
+[Function 5.1] Secure Registration: Mongoose Pre-save hook for `bcrypt` (Salt 12). Prevent double hashing on updates. `password` field must use `select: false`.
+[Function 5.2 & 5.3] Double-Gate Login & Ghost Session: Issue JWT via HttpOnly cookies. Middleware must check if token is valid AND if the user still exists in DB (Ghost check) AND if password was changed after token issuance (`changedPasswordAfter`).
+[Function 5.4] Dynamic RBAC: Factory function middleware `restrictTo('admin', 'instructor')` to protect routes.
+[Function 5.5] Anti-Brute Force & Token Blacklisting: Login delay (Artificial Latency) and token rotation/blacklisting on logout.
+
+=== PHASE 2: WEB FRONTEND (Admin/Instructor - React, Tailwind, Zustand) ===
+[Function 1.1] Identity Profile: Use `useState` to calculate Student Rank (Bronze/Silver/Gold) based on dynamic scores, with conditional styling.
+[Function 1.2 & 6.2] Async User Directory & Product Search: Fetch users/courses with Axios. Must implement `lodash.debounce` (600ms) to prevent API spam, Skeleton loading UI, and Error state with 'Retry' button.
+[Function 1.3] Git-like Multi-Theme Dashboard: Context API to toggle Dark/Light mode, updating Tailwind classes globally.
+[Function 1.4] Dynamic Recursive Comment System: For Course Q&A. Must be a recursive component allowing infinite nested replies. State update must be immutable (no `.push()`).
+[Function 1.5] Async Task Orchestrator: Queue system to upload multiple course files, limiting concurrency (Max Parallel = 2) using Promises.
+[Function 2.1 & 2.2] Personal Branding SPA & Dynamic Routing: React Router v6 setup. `useParams` for Course Detail page, and 404 Not Found handling.
+[Function 2.3] Advanced Shopping Cart: For purchasing courses. Use `Zustand` for global state. Include derived state (VAT/Tax calculation) and a Tailwind Side Drawer UI.
+[Function 2.4 & 6.3] Multi-step Course Creation Portal: Nested routing (`<Outlet />`). Use Context API + `Zustand` for state persistence across steps. Implement Zod Schema for Async Validation.
+[Function 2.5] Collaborative Dashboard: Protected Routes on frontend. Sync filter state with URL (`useSearchParams`).
+[Function 6.1] Secure Feedback Collector: React Hook Form + Axios for course reviews. Must handle validation without page refresh and show Toast notifications.
+[Function 6.4] Optimistic UI Updates: For deleting items. UI updates instantly before server confirms. Implement Axios Interceptors for Automatic Retry Logic (retry 3 times on network failure) and State Rollback if it fails.
+[Function 6.5] Dynamic Form Engine (Schema-to-UI): IMPORTANT! Render the "Exam Creation Form" dynamically based on a JSON schema from the backend. Must support nested objects and conditional rendering (e.g., show field B only if field A is "admin").
+
+=== PHASE 3: MOBILE FRONTEND (Student - React Native) ===
+[Function 7.1] Personal Link-in-Bio: Basic React Native layout using Flexbox, rounded images, and `Pressable` buttons with random color generation.
+[Function 7.2] Dynamic Currency Converter (Glassmorphism UI): Use `TextInput` with `KeyboardAvoidingView`. Must have translucent/shadow UI (Glassmorphism).
+[Function 7.3] Deep-Link Library Explorer: React Navigation (Stack). Fetch list of reading materials, pass params to details screen. Use Callback functions to sync "Favorite" state back to the home screen.
+[Function 7.4] Real-time Multi-Source Dashboard: Use `Promise.allSettled` to fetch from 2 APIs in parallel. Implement `AsyncStorage` to show cached data (Offline Mode) if the network fails.
+[Function 7.5] Offline-First Task Synchronizer: For submitting Exam answers offline. Save to `AsyncStorage` with "Pending" status. Use `NetInfo` to detect network return and automatically background sync (FIFO queue) to the server, updating status to "Synced".
+
+If you understand these requirements, reply with "UNDERSTOOD: INITIALIZING MERN & REACT NATIVE E-LEARNING PROJECT". Provide the folder structure and wait for my command to start coding PHASE 1.
+
+--------------------------------------------------------------------------------
