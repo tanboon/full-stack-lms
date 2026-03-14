@@ -47,8 +47,8 @@ export default function MaterialDetailScreen() {
   // Animate heart on toggle
   const animateHeart = useCallback(() => {
     Animated.sequence([
-      Animated.spring(scaleAnim, { toValue: 1.4, useNativeDriver: true, tension: 300 }),
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 300 }),
+      Animated.spring(scaleAnim, { toValue: 1.4, useNativeDriver: false, tension: 300 }),
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: false, tension: 300 }),
     ]).start();
   }, [scaleAnim]);
 

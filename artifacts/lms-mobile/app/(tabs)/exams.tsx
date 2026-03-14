@@ -137,8 +137,8 @@ export default function ExamsScreen() {
     if (isOnline) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.3, duration: 800, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.3, duration: 800, useNativeDriver: false }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: false }),
         ])
       ).start();
     } else {
