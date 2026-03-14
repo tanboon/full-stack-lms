@@ -9,6 +9,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
+import { router, useFocusEffect } from "expo-router";
 import { useAuth, API_BASE } from "@/contexts/AuthContext";
 import Colors from "@/constants/colors";
 
@@ -19,6 +20,7 @@ import Colors from "@/constants/colors";
 // - Auto-update status from "Pending" → "Synced" (or "Failed")
 
 const QUEUE_KEY = "exam_sync_queue_v2";
+const ENROLLED_KEY = "library_enrolled_courses";
 
 type RealQuestion = {
   _id: string;
@@ -32,7 +34,7 @@ type RealQuestion = {
 type RealExam = {
   _id: string;
   examTitle: string;
-  courseId?: { title: string };
+  courseId?: { _id: string; title: string };
   duration: number;
   passingScore: number;
   questions: RealQuestion[];
@@ -86,6 +88,7 @@ export default function ExamsScreen() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
 
+  const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
   const [exams, setExams] = useState<RealExam[]>([]);
   const [isLoadingExams, setIsLoadingExams] = useState(true);
   const [examsError, setExamsError] = useState<string | null>(null);
@@ -98,6 +101,13 @@ export default function ExamsScreen() {
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const isSyncingRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Load enrolled course IDs from AsyncStorage
+  const loadEnrolled = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    setEnrolledIds(new Set(ids));
+  }, []);
 
   // Load queue from AsyncStorage
   const loadQueue = useCallback(async () => {
@@ -185,7 +195,12 @@ export default function ExamsScreen() {
     setIsSyncing(false);
   }, [token, saveQueue]);
 
-  useEffect(() => { loadQueue(); fetchExams(); }, []);
+  useEffect(() => { loadQueue(); fetchExams(); loadEnrolled(); }, []);
+
+  // Reload enrolled IDs whenever this tab gains focus
+  useFocusEffect(
+    useCallback(() => { loadEnrolled(); }, [loadEnrolled])
+  );
 
   // [7.5] NetInfo — detect network changes and auto-trigger sync
   useEffect(() => {
@@ -509,7 +524,7 @@ export default function ExamsScreen() {
         <View>
           <Text style={[styles.listTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>Exams</Text>
           <Text style={[styles.listSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-            {exams.length} available · {queue.filter(q => q.status === "Pending").length} pending sync
+            {exams.filter(e => e.courseId?._id ? enrolledIds.has(e.courseId._id) : false).length} available · {queue.filter(q => q.status === "Pending").length} pending sync
           </Text>
         </View>
         <Animated.View style={[styles.onlineDot, { transform: [{ scale: pulseAnim }], borderColor: colors.border }]}>
@@ -534,48 +549,89 @@ export default function ExamsScreen() {
         </View>
       )}
 
-      {/* Available Exams */}
-      {!isLoadingExams && exams.length > 0 && (
-        <View style={{ paddingHorizontal: 20, gap: 12, marginBottom: 24 }}>
-          <Text style={[styles.sectionLabel, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
-            Available Exams
+      {/* No enrollments nudge */}
+      {!isLoadingExams && enrolledIds.size === 0 && (
+        <View style={[styles.nudgeCard, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 20, marginBottom: 20 }]}>
+          <Feather name="book-open" size={28} color={colors.primary} />
+          <Text style={[styles.nudgeTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+            Enroll in a course first
           </Text>
-          {exams.map(exam => (
-            <Pressable
-              key={exam._id}
-              onPress={() => { setSelectedExam(exam); setAnswers({}); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
-              style={[styles.examCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <View style={[styles.examIconBox, { backgroundColor: colors.primary + "20" }]}>
-                <Feather name="file-text" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.examName, { color: colors.text, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
-                  {exam.examTitle}
-                </Text>
-                {exam.courseId?.title && (
-                  <Text style={[styles.examCourse, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-                    {exam.courseId.title}
-                  </Text>
-                )}
-                <View style={styles.examMeta}>
-                  <Feather name="clock" size={12} color={colors.textSecondary} />
-                  <Text style={[styles.examDuration, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                    {exam.duration} min
-                  </Text>
-                  <Text style={[styles.examQCount, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-                    {exam.questions?.length ?? 0} questions
-                  </Text>
-                  <Text style={[styles.examQCount, { color: "#22C55E", fontFamily: "Inter_500Medium" }]}>
-                    Pass: {exam.passingScore}%
-                  </Text>
-                </View>
-              </View>
-              <Feather name="chevron-right" size={18} color={colors.textSecondary} />
-            </Pressable>
-          ))}
+          <Text style={[styles.nudgeDesc, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            Exams are only shown for courses you're enrolled in. Go to the Library tab to enroll.
+          </Text>
+          <Pressable
+            onPress={() => router.push("/(tabs)/library")}
+            style={[styles.nudgeBtn, { backgroundColor: colors.primary }]}
+          >
+            <Feather name="search" size={14} color="#fff" />
+            <Text style={[{ color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" }]}>Browse Library</Text>
+          </Pressable>
         </View>
       )}
+
+      {/* Available Exams — filtered to enrolled courses */}
+      {!isLoadingExams && exams.length > 0 && enrolledIds.size > 0 && (() => {
+        const filtered = exams.filter(e =>
+          e.courseId?._id ? enrolledIds.has(e.courseId._id) : false
+        );
+        return (
+        <View style={{ paddingHorizontal: 20, gap: 12, marginBottom: 24 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={[styles.sectionLabel, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+              My Exams
+            </Text>
+            <Text style={[{ fontSize: 12, color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+              {filtered.length} exam{filtered.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+          {filtered.length === 0 ? (
+            <View style={[styles.nudgeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="clipboard" size={24} color={colors.textSecondary} />
+              <Text style={[{ fontSize: 14, color: colors.textSecondary, fontFamily: "Inter_400Regular", textAlign: "center" }]}>
+                No exams available for your enrolled courses yet
+              </Text>
+            </View>
+          ) : (
+            <>
+              {filtered.map(exam => (
+                <Pressable
+                  key={exam._id}
+                  onPress={() => { setSelectedExam(exam); setAnswers({}); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+                  style={[styles.examCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
+                  <View style={[styles.examIconBox, { backgroundColor: colors.primary + "20" }]}>
+                    <Feather name="file-text" size={20} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.examName, { color: colors.text, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+                      {exam.examTitle}
+                    </Text>
+                    {exam.courseId?.title && (
+                      <Text style={[styles.examCourse, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+                        {exam.courseId.title}
+                      </Text>
+                    )}
+                    <View style={styles.examMeta}>
+                      <Feather name="clock" size={12} color={colors.textSecondary} />
+                      <Text style={[styles.examDuration, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                        {exam.duration} min
+                      </Text>
+                      <Text style={[styles.examQCount, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                        {exam.questions?.length ?? 0} questions
+                      </Text>
+                      <Text style={[styles.examQCount, { color: "#22C55E", fontFamily: "Inter_500Medium" }]}>
+                        Pass: {exam.passingScore}%
+                      </Text>
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+                </Pressable>
+              ))}
+            </>
+          )}
+        </View>
+        );
+      })()}
 
       {/* Sync Queue */}
       {queue.length > 0 && (
@@ -732,6 +788,17 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11 },
   statDivider: { width: 1, marginHorizontal: 8 },
   breakdownCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 6 },
+  nudgeCard: {
+    borderRadius: 20, borderWidth: 1, padding: 28,
+    alignItems: "center", gap: 10,
+  },
+  nudgeTitle: { fontSize: 17 },
+  nudgeDesc: { fontSize: 13, textAlign: "center", lineHeight: 20 },
+  nudgeBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 20, paddingVertical: 10,
+    borderRadius: 14, marginTop: 4,
+  },
   breakdownHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   breakdownQ: { fontSize: 13, lineHeight: 18 },
   breakdownAnswers: { paddingLeft: 24, gap: 3 },

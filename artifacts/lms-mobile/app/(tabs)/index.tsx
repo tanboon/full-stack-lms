@@ -1,98 +1,113 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  useColorScheme,
-  Linking,
-  Alert,
+  View, Text, StyleSheet, ScrollView, Pressable,
+  ActivityIndicator, useColorScheme, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
+import { router, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth, API_BASE } from "@/contexts/AuthContext";
 import Colors from "@/constants/colors";
 
-// [7.1] Personal Link-in-Bio: Flexbox, rounded images, Pressable with random color generation
+const ENROLLED_KEY = "library_enrolled_courses";
+const QUEUE_KEY = "exam_sync_queue_v2";
 
-const RANDOM_COLORS = [
-  "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4",
-  "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F",
-  "#BB8FCE", "#85C1E9", "#82E0AA", "#F0B27A",
-];
-
-function randomColor() {
-  return RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)];
-}
-
-type LinkItem = {
-  id: string;
-  label: string;
-  url: string;
-  icon: string;
-  color: string;
+const LEVEL_COLOR: Record<string, string> = {
+  beginner: "#22C55E",
+  intermediate: "#F7B731",
+  advanced: "#FF5C5C",
 };
 
-const INITIAL_LINKS: LinkItem[] = [
-  { id: "1", label: "My Course Portfolio", url: "https://example.com", icon: "book-open", color: "#6C63FF" },
-  { id: "2", label: "GitHub Projects", url: "https://github.com", icon: "github", color: "#24292E" },
-  { id: "3", label: "LinkedIn Profile", url: "https://linkedin.com", icon: "linkedin", color: "#0077B5" },
-  { id: "4", label: "Research Paper", url: "https://scholar.google.com", icon: "file-text", color: "#00D4AA" },
-  { id: "5", label: "Student Blog", url: "https://example.com/blog", icon: "edit-3", color: "#FF5C5C" },
-];
-
-const SKILLS_BY_ROLE: Record<string, string[]> = {
-  admin: ["System Admin", "User Management", "MongoDB", "Node.js", "React", "REST APIs"],
-  instructor: ["Teaching", "Curriculum Design", "Node.js", "React", "TypeScript", "MongoDB"],
-  student: ["React Native", "Node.js", "MongoDB", "TypeScript", "UI/UX Design", "REST APIs"],
+const CATEGORY_ICONS: Record<string, string> = {
+  "web-dev": "monitor",
+  "mobile-dev": "smartphone",
+  "data-science": "bar-chart-2",
+  "design": "pen-tool",
+  "business": "briefcase",
+  "other": "book",
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: "System Administrator",
-  instructor: "Course Instructor",
-  student: "Student",
+type Course = {
+  _id: string;
+  title: string;
+  description: string;
+  level: string;
+  category: string;
+  instructor: string;
+  duration: number;
+  enrolledCount: number;
+  price: number;
 };
 
-export default function ProfileScreen() {
+export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = Colors[isDark ? "dark" : "light"];
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
-  const [links, setLinks] = useState<LinkItem[]>(INITIAL_LINKS);
+  const { user, token, logout } = useAuth();
 
-  const handleRandomize = useCallback((id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setLinks(prev =>
-      prev.map(l => l.id === id ? { ...l, color: randomColor() } : l)
-    );
-  }, []);
+  const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
+  const [submittedCount, setSubmittedCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleLink = useCallback((url: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Linking.openURL(url).catch(() => {});
-  }, []);
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Load enrolled IDs from AsyncStorage
+      const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+      const ids: string[] = raw ? JSON.parse(raw) : [];
+      setEnrolledIds(ids);
+
+      // Load submitted exam count from queue
+      const qRaw = await AsyncStorage.getItem(QUEUE_KEY);
+      const q = qRaw ? JSON.parse(qRaw) : [];
+      setSubmittedCount(q.filter((e: any) => e.status === "Synced").length);
+
+      // Fetch all courses from API
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/courses?limit=100`, { headers });
+      const json = await res.json();
+      const all: Course[] = json.data ?? json.courses ?? [];
+      setCourses(all);
+
+      // Filter to enrolled only
+      if (ids.length > 0) {
+        setEnrolledCourses(all.filter(c => ids.includes(c._id)));
+      } else {
+        setEnrolledCourses([]);
+      }
+    } catch {
+      setEnrolledCourses([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { loadData(); }, []);
+
+  // Reload whenever this tab gets focus (e.g. after enrolling from Library)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/login");
-        },
+        text: "Sign Out", style: "destructive",
+        onPress: async () => { await logout(); router.replace("/login"); },
       },
     ]);
   };
 
   const role = user?.role ?? "student";
-  const skills = SKILLS_BY_ROLE[role] ?? SKILLS_BY_ROLE.student;
-  const roleLabel = ROLE_LABELS[role] ?? "Student";
 
   return (
     <ScrollView
@@ -100,153 +115,212 @@ export default function ProfileScreen() {
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 100 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero Card */}
-      <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {/* Avatar */}
-        <View style={styles.avatarWrapper}>
-          <View style={[styles.avatarRing, { borderColor: colors.primary }]}>
-            <View style={[styles.avatar, { backgroundColor: colors.primary + "22" }]}>
-              <Ionicons name="person" size={48} color={colors.primary} />
-            </View>
-          </View>
-          <View style={[styles.statusDot, { borderColor: colors.card }]} />
-        </View>
-
-        <Text style={[styles.name, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
-          {user?.name ?? "Loading..."}
-        </Text>
-        <Text style={[styles.roleLabel, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-          {roleLabel}
-        </Text>
-        <Text style={[styles.email, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-          {user?.email}
-        </Text>
-
-        {/* Role Badge */}
-        <View style={[styles.roleBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}>
-          <Feather
-            name={role === "admin" ? "shield" : role === "instructor" ? "book" : "user"}
-            size={12}
-            color={colors.primary}
-          />
-          <Text style={[styles.roleBadgeText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-            {role.toUpperCase()}
+      {/* Header */}
+      <View style={[styles.header, { paddingHorizontal: 20 }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.greeting, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            Welcome back,
+          </Text>
+          <Text style={[styles.userName, { color: colors.text, fontFamily: "Inter_700Bold" }]} numberOfLines={1}>
+            {user?.name ?? "Student"}
           </Text>
         </View>
-
-        {/* Sign Out */}
         <Pressable
           onPress={handleLogout}
-          style={[styles.logoutBtn, { borderColor: colors.border }]}
+          style={[styles.avatarBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}
         >
-          <Feather name="log-out" size={14} color={colors.danger} />
-          <Text style={[styles.logoutText, { color: colors.danger, fontFamily: "Inter_500Medium" }]}>
-            Sign Out
-          </Text>
+          <Ionicons name="person" size={22} color={colors.primary} />
         </Pressable>
       </View>
 
-      {/* Skills */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>Skills</Text>
-        <View style={styles.skillsWrap}>
-          {skills.map(skill => (
-            <View
-              key={skill}
-              style={[styles.skillTag, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}
-            >
-              <Text style={[styles.skillText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-                {skill}
-              </Text>
-            </View>
-          ))}
+      {/* Stats Row */}
+      <View style={[styles.statsRow, { marginHorizontal: 20, marginTop: 20 }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statIcon, { backgroundColor: "#6C63FF18" }]}>
+            <Feather name="book-open" size={18} color="#6C63FF" />
+          </View>
+          <Text style={[styles.statNum, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+            {enrolledIds.length}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            Enrolled
+          </Text>
+        </View>
+
+        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statIcon, { backgroundColor: "#22C55E18" }]}>
+            <Feather name="check-circle" size={18} color="#22C55E" />
+          </View>
+          <Text style={[styles.statNum, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+            {submittedCount}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            Exams Done
+          </Text>
+        </View>
+
+        <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statIcon, { backgroundColor: "#F7B73118" }]}>
+            <Feather name="layers" size={18} color="#F7B731" />
+          </View>
+          <Text style={[styles.statNum, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+            {courses.length}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            Total Courses
+          </Text>
         </View>
       </View>
 
-      {/* Links */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>Links</Text>
-        <Text style={[styles.hint, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-          Tap the color dot to randomize color
-        </Text>
-        {links.map(item => (
-          <Pressable
-            key={item.id}
-            onPress={() => handleLink(item.url)}
-            style={[styles.linkCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <View style={[styles.linkIcon, { backgroundColor: item.color + "22" }]}>
-              <Feather name={item.icon as any} size={18} color={item.color} />
-            </View>
-            <Text style={[styles.linkLabel, { color: colors.text, fontFamily: "Inter_500Medium" }]}>
-              {item.label}
-            </Text>
-            {/* [7.1] Pressable random color dot */}
-            <Pressable onPress={() => handleRandomize(item.id)} hitSlop={10}>
-              <View style={[styles.colorDot, { backgroundColor: item.color }]} />
+      {/* My Courses */}
+      <View style={{ marginTop: 28, paddingHorizontal: 20 }}>
+        <View style={styles.sectionRow}>
+          <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+            My Enrolled Courses
+          </Text>
+          {enrolledCourses.length > 0 && (
+            <Pressable onPress={() => router.push("/(tabs)/library")}>
+              <Text style={[styles.seeAll, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                Browse More
+              </Text>
             </Pressable>
-          </Pressable>
-        ))}
+          )}
+        </View>
+
+        {isLoading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[{ fontSize: 13, color: colors.textSecondary, fontFamily: "Inter_400Regular", marginTop: 8 }]}>
+              Loading your courses...
+            </Text>
+          </View>
+        ) : enrolledCourses.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.primary + "15" }]}>
+              <Feather name="book" size={32} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+              No courses yet
+            </Text>
+            <Text style={[styles.emptyDesc, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+              Browse the library and tap "Enroll" to add courses here
+            </Text>
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/library"); }}
+              style={[styles.browseBtn, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="search" size={15} color="#fff" />
+              <Text style={[styles.browseBtnText, { fontFamily: "Inter_600SemiBold" }]}>
+                Browse Library
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ gap: 12 }}>
+            {enrolledCourses.map(course => {
+              const levelColor = LEVEL_COLOR[course.level] ?? "#6C63FF";
+              const catIcon = CATEGORY_ICONS[course.category] ?? "book";
+              return (
+                <Pressable
+                  key={course._id}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/library/${course._id}`); }}
+                  style={[styles.courseCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
+                  {/* Icon */}
+                  <View style={[styles.courseIcon, { backgroundColor: colors.primary + "15" }]}>
+                    <Feather name={catIcon as any} size={22} color={colors.primary} />
+                  </View>
+
+                  {/* Info */}
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={[styles.courseTitle, { color: colors.text, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>
+                      {course.title}
+                    </Text>
+                    <View style={styles.courseMeta}>
+                      <View style={[styles.levelBadge, { backgroundColor: levelColor + "18", borderColor: levelColor + "40" }]}>
+                        <Text style={[styles.levelText, { color: levelColor, fontFamily: "Inter_500Medium" }]}>
+                          {course.level}
+                        </Text>
+                      </View>
+                      <Text style={[styles.courseMetaText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                        {course.duration}h · {course.enrolledCount} enrolled
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Arrow */}
+                  <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
+
+      {/* Quick tip when enrolled */}
+      {!isLoading && enrolledCourses.length > 0 && (
+        <View style={[styles.tipCard, { backgroundColor: colors.primary + "0D", borderColor: colors.primary + "30", marginHorizontal: 20, marginTop: 20 }]}>
+          <Feather name="info" size={15} color={colors.primary} />
+          <Text style={[styles.tipText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>
+            Head to the <Text style={{ fontFamily: "Inter_600SemiBold" }}>Exams</Text> tab to take exams for your enrolled courses.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  heroCard: {
-    marginHorizontal: 20, marginBottom: 8,
-    padding: 24, borderRadius: 24,
-    alignItems: "center", borderWidth: 1,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-    gap: 6,
+  header: { flexDirection: "row", alignItems: "center", gap: 12 },
+  greeting: { fontSize: 13, marginBottom: 2 },
+  userName: { fontSize: 24 },
+  avatarBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    justifyContent: "center", alignItems: "center", borderWidth: 1,
   },
-  avatarWrapper: { position: "relative", marginBottom: 10 },
-  avatarRing: {
-    width: 100, height: 100, borderRadius: 50,
-    borderWidth: 3, padding: 3, justifyContent: "center", alignItems: "center",
+  statsRow: { flexDirection: "row", gap: 10 },
+  statCard: {
+    flex: 1, borderRadius: 16, borderWidth: 1,
+    padding: 14, alignItems: "center", gap: 6,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
-  avatar: {
-    width: 88, height: 88, borderRadius: 44,
-    justifyContent: "center", alignItems: "center",
+  statIcon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  statNum: { fontSize: 22 },
+  statLabel: { fontSize: 11, textAlign: "center" },
+  sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  sectionTitle: { fontSize: 18 },
+  seeAll: { fontSize: 13 },
+  centered: { alignItems: "center", paddingVertical: 40 },
+  emptyCard: {
+    borderRadius: 20, borderWidth: 1, padding: 32,
+    alignItems: "center", gap: 10,
   },
-  statusDot: {
-    position: "absolute", bottom: 4, right: 4,
-    width: 16, height: 16, borderRadius: 8,
-    backgroundColor: "#22C55E", borderWidth: 2,
+  emptyIcon: { width: 72, height: 72, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 4 },
+  emptyTitle: { fontSize: 18 },
+  emptyDesc: { fontSize: 13, textAlign: "center", lineHeight: 20, paddingHorizontal: 10 },
+  browseBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 24, paddingVertical: 12,
+    borderRadius: 14, marginTop: 8,
   },
-  name: { fontSize: 24, marginTop: 4 },
-  roleLabel: { fontSize: 14 },
-  email: { fontSize: 13 },
-  roleBadge: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 12, paddingVertical: 5,
-    borderRadius: 20, borderWidth: 1, marginTop: 4,
+  browseBtnText: { color: "#fff", fontSize: 15 },
+  courseCard: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    borderRadius: 16, borderWidth: 1, padding: 14,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
-  roleBadgeText: { fontSize: 11 },
-  logoutBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    marginTop: 8, paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 12, borderWidth: 1,
+  courseIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  courseTitle: { fontSize: 15, lineHeight: 20 },
+  courseMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  levelText: { fontSize: 11 },
+  courseMetaText: { fontSize: 12 },
+  tipCard: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    borderRadius: 14, borderWidth: 1, padding: 14,
   },
-  logoutText: { fontSize: 13 },
-  section: { marginTop: 20, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 18, marginBottom: 12 },
-  hint: { fontSize: 12, marginBottom: 10, marginTop: -6 },
-  skillsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  skillTag: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1,
-  },
-  skillText: { fontSize: 13 },
-  linkCard: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    padding: 14, borderRadius: 14, borderWidth: 1,
-    marginBottom: 10, shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
-  },
-  linkIcon: { width: 38, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center" },
-  linkLabel: { flex: 1, fontSize: 15 },
-  colorDot: { width: 18, height: 18, borderRadius: 9 },
+  tipText: { fontSize: 13, lineHeight: 19, flex: 1 },
 });
