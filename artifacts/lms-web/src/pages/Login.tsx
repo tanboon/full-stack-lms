@@ -21,6 +21,9 @@ export default function Login() {
       const res = await api.post('/auth/login', { email, password });
       if (res.data.token) {
         localStorage.setItem('lms_token', res.data.token);
+        if (res.data.user) {
+          localStorage.setItem('lms_user', JSON.stringify(res.data.user));
+        }
         navigate('/');
       }
     } catch (err: any) {

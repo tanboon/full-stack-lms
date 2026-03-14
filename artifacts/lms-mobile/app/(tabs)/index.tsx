@@ -4,7 +4,7 @@ import {
   ActivityIndicator, useColorScheme, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -125,12 +125,11 @@ export default function DashboardScreen() {
             {user?.name ?? "Student"}
           </Text>
         </View>
-        <Pressable
-          onPress={handleLogout}
-          style={[styles.avatarBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}
-        >
-          <Ionicons name="person" size={22} color={colors.primary} />
-        </Pressable>
+        <View style={[styles.avatarBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}>
+          <Text style={[{ fontSize: 15, color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+            {(user?.name ?? "S").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+          </Text>
+        </View>
       </View>
 
       {/* Stats Row */}
@@ -266,6 +265,48 @@ export default function DashboardScreen() {
           </Text>
         </View>
       )}
+
+      {/* Account Section */}
+      <View style={{ marginHorizontal: 20, marginTop: 28 }}>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold", marginBottom: 14 }]}>
+          Account
+        </Text>
+        {/* User info card */}
+        <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.accountAvatar, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "35" }]}>
+            <Text style={[styles.accountInitials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+              {(user?.name ?? "S").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+            </Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[{ fontSize: 15, color: colors.text, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+              {user?.name ?? "Student"}
+            </Text>
+            <Text style={[{ fontSize: 13, color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+              {user?.email ?? ""}
+            </Text>
+            <View style={[styles.roleBadge, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
+              <Text style={[{ fontSize: 11, color: colors.primary, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" }]}>
+                {user?.role ?? "student"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Sign Out button */}
+        <Pressable
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.signOutBtn,
+            { backgroundColor: pressed ? "#FF5C5C20" : "#FF5C5C12", borderColor: "#FF5C5C35" },
+          ]}
+        >
+          <Feather name="log-out" size={18} color="#FF5C5C" />
+          <Text style={[styles.signOutText, { fontFamily: "Inter_600SemiBold" }]}>
+            Sign Out
+          </Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -323,4 +364,25 @@ const styles = StyleSheet.create({
     borderRadius: 14, borderWidth: 1, padding: 14,
   },
   tipText: { fontSize: 13, lineHeight: 19, flex: 1 },
+  accountCard: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    borderRadius: 18, borderWidth: 1, padding: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    marginBottom: 12,
+  },
+  accountAvatar: {
+    width: 52, height: 52, borderRadius: 16,
+    borderWidth: 1.5, justifyContent: "center", alignItems: "center", flexShrink: 0,
+  },
+  accountInitials: { fontSize: 18 },
+  roleBadge: {
+    alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 8, borderWidth: 1, marginTop: 2,
+  },
+  signOutBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    borderRadius: 16, borderWidth: 1, paddingVertical: 14, marginBottom: 12,
+  },
+  signOutText: { fontSize: 15, color: "#FF5C5C" },
 });
