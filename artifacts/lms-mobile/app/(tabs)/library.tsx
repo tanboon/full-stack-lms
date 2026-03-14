@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth, API_BASE } from "@/contexts/AuthContext";
 import Colors from "@/constants/colors";
 
 // [7.3] Deep-Link Library Explorer — fetches real courses from backend,
@@ -15,7 +16,6 @@ import Colors from "@/constants/colors";
 
 const FAVORITES_KEY = "library_favorites";
 const CACHE_KEY = "library_courses_cache";
-const API_BASE = "https://c80ad5b9-f987-4edd-b1e4-e0e56710da93-00-28eoe9ojq7n75.riker.replit.dev/api";
 
 type Course = {
   _id: string;
@@ -25,8 +25,7 @@ type Course = {
   price: number;
   tags: string[];
   level: "beginner" | "intermediate" | "advanced";
-  enrolled: number;
-  thumbnail?: string;
+  enrolledCount: number;
   isFavorite?: boolean;
 };
 
@@ -37,20 +36,12 @@ const LEVEL_COLORS: Record<string, string> = {
   advanced: "#FF5C5C",
 };
 
-async function fetchCourses(): Promise<Course[]> {
-  const token = await AsyncStorage.getItem("lms_mobile_token");
-  const res = await fetch(`${API_BASE}/courses`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  const json = await res.json();
-  return (json.data ?? json.courses ?? []) as Course[];
-}
-
 export default function LibraryScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = Colors[isDark ? "dark" : "light"];
   const insets = useSafeAreaInsets();
+  const { token } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -69,12 +60,15 @@ export default function LibraryScreen() {
     else setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchCourses();
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/courses`, { headers });
+      const json = await res.json();
+      const data: Course[] = json.data ?? json.courses ?? [];
       if (data.length > 0) {
         await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
         setCourses(data);
       } else {
-        // Try cache
         const cached = await AsyncStorage.getItem(CACHE_KEY);
         if (cached) setCourses(JSON.parse(cached));
       }
@@ -90,7 +84,7 @@ export default function LibraryScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     loadFavorites();
@@ -112,13 +106,10 @@ export default function LibraryScreen() {
   const filtered = courses.filter(c => {
     const matchSearch =
       c.title.toLowerCase().includes(search.toLowerCase()) ||
-      c.description.toLowerCase().includes(search.toLowerCase()) ||
-      c.tags.some(t => t.toLowerCase().includes(search.toLowerCase()));
+      c.description.toLowerCase().includes(search.toLowerCase());
     const matchLevel = selectedLevel === "All" || c.level === selectedLevel;
     return matchSearch && matchLevel;
   });
-
-  const favoriteCount = favorites.size;
 
   if (isLoading) {
     return (
@@ -133,119 +124,141 @@ export default function LibraryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={[styles.title, { color: colors.text, fontFamily: "Inter_700Bold" }]}>Library</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-              {courses.length} courses from backend
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => loadCourses(true)}
-            style={[styles.refreshBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <Feather name={favoriteCount > 0 ? "heart" : "refresh-cw"} size={18} color={favoriteCount > 0 ? "#FF5C5C" : colors.primary} />
-            {favoriteCount > 0 && (
-              <Text style={[styles.favCount, { color: "#FF5C5C", fontFamily: "Inter_600SemiBold" }]}>{favoriteCount}</Text>
-            )}
-          </Pressable>
-        </View>
-
-        {/* Error notice */}
-        {error && (
-          <View style={[styles.errorNotice, { backgroundColor: "#F7B73118", borderColor: "#F7B73140" }]}>
-            <Feather name="wifi-off" size={12} color="#F7B731" />
-            <Text style={[styles.errorNoticeText, { color: "#F7B731", fontFamily: "Inter_400Regular" }]}>{error}</Text>
-          </View>
-        )}
-
-        {/* Search */}
-        <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="search" size={16} color={colors.textSecondary} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text, fontFamily: "Inter_400Regular" }]}
-            placeholder="Search courses, tags..."
-            placeholderTextColor={colors.textSecondary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")}>
-              <Feather name="x-circle" size={16} color={colors.textSecondary} />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Level filter */}
-        <FlatList
-          horizontal
-          data={LEVELS}
-          keyExtractor={s => s}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8 }}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => { Haptics.selectionAsync(); setSelectedLevel(item); }}
-              style={[styles.levelChip, { backgroundColor: selectedLevel === item ? colors.primary : colors.card, borderColor: selectedLevel === item ? colors.primary : colors.border }]}
-            >
-              <Text style={[styles.levelChipText, { color: selectedLevel === item ? "#fff" : colors.text, fontFamily: "Inter_500Medium" }]}>
-                {item === "All" ? "All" : item.charAt(0).toUpperCase() + item.slice(1)}
-              </Text>
-            </Pressable>
-          )}
-        />
-      </View>
-
-      {/* Courses list */}
       <FlatList
         data={filtered}
         keyExtractor={item => item._id}
-        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 100, gap: 12 }}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={() => loadCourses(true)} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadCourses(true)}
+            tintColor={colors.primary}
+          />
+        }
+        ListHeaderComponent={
+          <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+            <View style={styles.headerRow}>
+              <View>
+                <Text style={[styles.title, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+                  Library
+                </Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                  {courses.length} courses · {favorites.size} favourites
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => loadCourses(true)}
+                style={[styles.refreshBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+              >
+                <Feather name="refresh-cw" size={14} color={colors.primary} />
+                <Text style={[styles.favCount, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                  Refresh
+                </Text>
+              </Pressable>
+            </View>
+
+            {error && (
+              <View style={[styles.errorNotice, { backgroundColor: "#F7B73118", borderColor: "#F7B73140" }]}>
+                <Feather name="wifi-off" size={14} color="#F7B731" />
+                <Text style={[styles.errorNoticeText, { color: "#F7B731", fontFamily: "Inter_400Regular" }]}>
+                  {error}
+                </Text>
+              </View>
+            )}
+
+            {/* Search */}
+            <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="search" size={16} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text, fontFamily: "Inter_400Regular" }]}
+                placeholder="Search courses..."
+                placeholderTextColor={colors.textSecondary}
+                value={search}
+                onChangeText={setSearch}
+              />
+              {search.length > 0 && (
+                <Pressable onPress={() => setSearch("")}>
+                  <Feather name="x" size={14} color={colors.textSecondary} />
+                </Pressable>
+              )}
+            </View>
+
+            {/* Level Filter */}
+            <FlatList
+              horizontal
+              data={LEVELS}
+              keyExtractor={l => l}
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item: level }) => (
+                <Pressable
+                  onPress={() => { setSelectedLevel(level); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  style={[
+                    styles.levelChip,
+                    {
+                      backgroundColor: selectedLevel === level ? colors.primary : colors.card,
+                      borderColor: selectedLevel === level ? colors.primary : colors.border,
+                      marginRight: 8,
+                    },
+                  ]}
+                >
+                  <Text style={[
+                    styles.levelChipText,
+                    { fontFamily: "Inter_500Medium" },
+                    selectedLevel === level ? { color: "#fff" } : { color: colors.textSecondary },
+                  ]}>
+                    {level.charAt(0).toUpperCase() + level.slice(1)}
+                  </Text>
+                </Pressable>
+              )}
+            />
+          </View>
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Feather name="book-open" size={48} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>No courses found</Text>
+            <Feather name="book" size={40} color={colors.textSecondary} />
+            <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
+              {search ? "No matching courses" : "No courses found"}
+            </Text>
           </View>
         }
         renderItem={({ item }) => {
           const isFav = favorites.has(item._id);
-          const levelColor = LEVEL_COLORS[item.level] || colors.primary;
           return (
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({ pathname: "/library/[id]", params: { id: item._id, isFavorite: String(isFav) } });
+                router.push(`/library/${item._id}`);
               }}
-              style={({ pressed }) => [
-                styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }
-              ]}
+              style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 20, marginBottom: 12 }]}
             >
+              <View style={[styles.courseIcon, { backgroundColor: colors.primary + "20" }]}>
+                <Feather name="book-open" size={20} color={colors.primary} />
+              </View>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[styles.cardTitle, { color: colors.text, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>{item.title}</Text>
-                <Text style={[styles.cardDesc, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={2}>{item.description}</Text>
+                <Text style={[styles.cardTitle, { color: colors.text, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                <Text style={[styles.cardDesc, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={2}>
+                  {item.description}
+                </Text>
                 <View style={styles.cardMeta}>
-                  <View style={[styles.levelBadge, { backgroundColor: levelColor + "20" }]}>
-                    <Text style={[styles.levelBadgeText, { color: levelColor, fontFamily: "Inter_500Medium" }]}>
-                      {item.level.charAt(0).toUpperCase() + item.level.slice(1)}
+                  <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[item.level] ?? "#888") + "20" }]}>
+                    <Text style={[styles.levelBadgeText, { color: LEVEL_COLORS[item.level] ?? "#888", fontFamily: "Inter_500Medium" }]}>
+                      {item.level}
                     </Text>
                   </View>
-                  <Feather name="users" size={12} color={colors.textSecondary} />
-                  <Text style={[styles.metaText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{item.enrolled}</Text>
-                  <Text style={[styles.priceText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                    ฿{(item.price / 100).toFixed(0)}
+                  <Text style={[styles.metaText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                    {item.enrolledCount ?? 0} enrolled
+                  </Text>
+                  <Text style={[styles.priceText, { color: colors.accent, fontFamily: "Inter_600SemiBold" }]}>
+                    ${item.price}
                   </Text>
                 </View>
-                {item.tags.length > 0 && (
+                {item.tags?.length > 0 && (
                   <View style={styles.tagsRow}>
                     {item.tags.slice(0, 3).map(tag => (
                       <View key={tag} style={[styles.tag, { backgroundColor: colors.primary + "15" }]}>
-                        <Text style={[styles.tagText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>#{tag}</Text>
+                        <Text style={[styles.tagText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>{tag}</Text>
                       </View>
                     ))}
                   </View>
@@ -256,7 +269,12 @@ export default function LibraryScreen() {
                 hitSlop={10}
                 style={{ paddingLeft: 8 }}
               >
-                <Feather name={isFav ? "heart" : "heart"} size={20} color={isFav ? "#FF5C5C" : colors.textSecondary} />
+                <Feather
+                  name="heart"
+                  size={20}
+                  color={isFav ? "#FF5C5C" : colors.textSecondary}
+                  style={{ opacity: isFav ? 1 : 0.5 }}
+                />
               </Pressable>
             </Pressable>
           );
@@ -287,6 +305,7 @@ const styles = StyleSheet.create({
     padding: 14, borderRadius: 16, borderWidth: 1,
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
+  courseIcon: { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   cardTitle: { fontSize: 15, lineHeight: 20 },
   cardDesc: { fontSize: 12, lineHeight: 17 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" },

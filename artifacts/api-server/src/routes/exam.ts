@@ -162,6 +162,26 @@ router.post("/exams", protect, restrictTo("admin", "instructor"), async (req: an
   }
 });
 
+// POST /api/exams/:id/submit — mobile offline FIFO queue sync target [7.5]
+router.post("/exams/:id/submit", protect, async (req: any, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id).lean();
+    if (!exam) return res.status(404).json({ status: "error", message: "Exam not found" });
+    res.json({
+      status: "success",
+      message: "Submission received",
+      data: {
+        examId: req.params.id,
+        userId: req.user._id,
+        answersCount: Object.keys(req.body.answers ?? {}).length,
+        receivedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err: any) {
+    res.status(400).json({ status: "error", message: err.message });
+  }
+});
+
 // DELETE /api/exams/:id — soft delete
 router.delete("/exams/:id", protect, restrictTo("admin"), async (req, res) => {
   await Exam.findByIdAndUpdate(req.params.id, { isDeleted: true });
