@@ -18,6 +18,7 @@ type AuthContextType = {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -62,6 +63,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(userData);
   };
 
+  const register = async (name: string, email: string, password: string) => {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password, role: "student" }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Registration failed");
+    const { token: newToken, data: userData } = json;
+    await Promise.all([
+      AsyncStorage.setItem(TOKEN_KEY, newToken),
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)),
+    ]);
+    setToken(newToken);
+    setUser(userData);
+  };
+
   const logout = async () => {
     await Promise.all([
       AsyncStorage.removeItem(TOKEN_KEY),
@@ -72,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ token, user, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
