@@ -1,0 +1,33 @@
+packages:
+  "react-router-dom": "University requirement [2.1 & 2.2] dictates React Router v6 for SPA and nested Outlet routing"
+  "axios": "University requirement [1.2, 6.2, 6.4] for fetching, interceptors, and retries"
+  "zustand": "University requirement [2.3, 2.4] for Shopping Cart and Multi-step form state"
+  "react-hook-form": "University requirement [6.1] for form state management"
+  "@hookform/resolvers": "For Zod integration with react-hook-form"
+  "lodash": "University requirement [1.2] for debounce utility"
+  "@types/lodash": "Type definitions for lodash"
+  "framer-motion": "For premium animations and visual polish"
+  "clsx": "Utility for conditional Tailwind classes"
+  "tailwind-merge": "Utility for merging Tailwind classes"
+
+images:
+  - path: "artifacts/lms-web/public/images/auth-bg.png"
+    description: "Abstract dark professional gradient background with subtle blue and purple geometric shapes and glassmorphism elements"
+    aspect_ratio: "16:9"
+  - path: "artifacts/lms-web/public/images/logo-icon.png"
+    description: "Minimalist premium letter L and M intertwined, glowing electric blue on dark background"
+    aspect_ratio: "1:1"
+  - path: "artifacts/lms-web/public/images/bronze-badge.png"
+    description: "Beautiful 3D bronze metallic badge with star emblem, high quality render"
+    aspect_ratio: "1:1"
+  - path: "artifacts/lms-web/public/images/silver-badge.png"
+    description: "Beautiful 3D silver metallic badge with star emblem, high quality render"
+    aspect_ratio: "1:1"
+  - path: "artifacts/lms-web/public/images/gold-badge.png"
+    description: "Beautiful 3D gold metallic badge with star emblem, high quality render"
+    aspect_ratio: "1:1"
+
+notes:
+  - Using react-router-dom instead of wouter to strictly satisfy university requirement [2.1 & 2.2]
+  - Axios interceptors implemented for requirement [6.4]
+  - Mock JSON schema provided if backend /api/exam/schema is not populated yet
