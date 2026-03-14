@@ -58,10 +58,10 @@ const userSchema = new Schema<IUser>(
 );
 
 // [5.1] Pre-save hook: bcrypt with Salt 12. Guards against double-hashing.
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next(); // prevent double hashing on unrelated updates
+// Mongoose 9.x: async hooks do not receive a `next` parameter — just return or throw.
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return; // prevent double hashing on unrelated updates
   this.password = await bcrypt.hash(this.password, 12);
-  next();
 });
 
 userSchema.methods.correctPassword = async function (
@@ -81,9 +81,8 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp: number): boole
 };
 
 // [4.2] Automatically exclude soft-deleted users from standard find queries
-userSchema.pre(/^find/, function (this: mongoose.Query<unknown, unknown>, next) {
+userSchema.pre(/^find/, function (this: mongoose.Query<unknown, unknown>) {
   this.where({ isDeleted: { $ne: true } });
-  next();
 });
 
 const User = mongoose.model<IUser>("User", userSchema);

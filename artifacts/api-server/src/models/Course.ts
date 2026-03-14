@@ -109,9 +109,8 @@ courseSchema.virtual("salePrice").get(function (this: ICourse) {
 });
 
 // [4.2] Automatically exclude soft-deleted courses from standard find queries
-courseSchema.pre(/^find/, function (this: mongoose.Query<unknown, unknown>, next) {
+courseSchema.pre(/^find/, function (this: mongoose.Query<unknown, unknown>) {
   this.where({ isDeleted: { $ne: true } });
-  next();
 });
 
 const Course = mongoose.model<ICourse>("Course", courseSchema);
