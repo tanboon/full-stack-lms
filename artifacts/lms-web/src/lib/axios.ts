@@ -17,12 +17,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// [6.4] Response interceptor for optimistic UI retries
+// [6.4] Response interceptor for optimistic UI retries + 401 redirect
 // Retry failed requests up to 3 times on network error
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error.config;
+
+    // [5.2] If token is rejected (401), clear local storage and redirect to login
+    if (error.response?.status === 401 && !config?._is401Redirect) {
+      const token = localStorage.getItem('lms_token');
+      if (token) {
+        // Token existed but was rejected (expired / revoked) — clear it and redirect
+        localStorage.removeItem('lms_token');
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+    }
     
     // Only retry if config.retry is explicitly set to true
     if (!config || !config.retry) {

@@ -8,7 +8,8 @@ const router = Router();
 
 // [6.5] Dynamic Form Engine — JSON schema drives the exam creation UI
 // Populates courseId options dynamically from real MongoDB courses
-router.get("/exam/schema", protect, async (_req, res) => {
+// NOTE: No auth required — this is just structural metadata for the form
+router.get("/exam/schema", async (_req, res) => {
   const courses = await Course.find({}).select("title _id").lean();
   const courseOptions = courses.map((c: any) => ({
     value: String(c._id),
