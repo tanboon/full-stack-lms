@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  useColorScheme, ActivityIndicator, Alert,
+  useColorScheme, ActivityIndicator, Alert, Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -14,6 +14,7 @@ import { useAuth, API_BASE } from "@/contexts/AuthContext";
 // [7.3] Deep-Link Library Explorer — useLocalSearchParams, real course data from API
 
 const FAVORITES_KEY = "library_favorites";
+const ENROLLED_KEY = "library_enrolled_courses";
 
 const LEVEL_COLOR: Record<string, string> = {
   beginner: "#22C55E",
@@ -44,8 +45,20 @@ export default function CourseDetailScreen() {
   const [isFavorite, setIsFavorite] = useState(initialFav === "true");
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
 
-  // Load course from API
+  // Show brief toast message
+  const showToast = useCallback((msg: string) => {
+    setToastMsg(msg);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.delay(1600),
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: false }),
+    ]).start(() => setToastMsg(null));
+  }, [toastAnim]);
+
+  // Load course from API + check persisted enrolment
   const loadCourse = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
@@ -67,7 +80,19 @@ export default function CourseDetailScreen() {
     }
   }, [id, token]);
 
-  useEffect(() => { loadCourse(); }, [loadCourse]);
+  // Check persisted enrollment and favourite state on mount
+  useEffect(() => {
+    loadCourse();
+    (async () => {
+      const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+      const ids: string[] = raw ? JSON.parse(raw) : [];
+      if (id && ids.includes(id)) setEnrolled(true);
+      // Also re-read favourite from storage (may differ from param)
+      const favRaw = await AsyncStorage.getItem(FAVORITES_KEY);
+      const favIds: string[] = favRaw ? JSON.parse(favRaw) : [];
+      if (id) setIsFavorite(favIds.includes(id));
+    })();
+  }, [id]);
 
   // Persist favorite to AsyncStorage [7.3]
   const toggleFavorite = useCallback(async () => {
@@ -79,13 +104,15 @@ export default function CourseDetailScreen() {
     const favIds: string[] = json ? JSON.parse(json) : [];
     const updated = newFav ? [...new Set([...favIds, id])] : favIds.filter((f: string) => f !== id);
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
-  }, [isFavorite, id]);
+    showToast(newFav ? "Added to favourites" : "Removed from favourites");
+  }, [isFavorite, id, showToast]);
 
   const handleEnroll = useCallback(async () => {
     if (!id || !token) {
       Alert.alert("Sign In Required", "Please log in to enroll in courses.");
       return;
     }
+    if (enrolled) return;
     setIsEnrolling(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -96,9 +123,15 @@ export default function CourseDetailScreen() {
       const json = await res.json();
       if (res.ok && json.status === "success") {
         setEnrolled(true);
+        // Persist enrollment locally so it survives navigation
+        const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+        const ids: string[] = raw ? JSON.parse(raw) : [];
+        if (!ids.includes(id)) {
+          await AsyncStorage.setItem(ENROLLED_KEY, JSON.stringify([...ids, id]));
+        }
         // Update local seat count
-        if (course) setCourse((c: any) => ({ ...c, enrolledCount: (c.enrolledCount ?? 0) + 1, seats: Math.max(0, (c.seats ?? 0) - 1) }));
-        Alert.alert("Enrolled!", `You are now enrolled in "${course?.title ?? "this course"}".`);
+        setCourse((c: any) => c ? { ...c, enrolledCount: (c.enrolledCount ?? 0) + 1, seats: Math.max(0, (c.seats ?? 0) - 1) } : c);
+        showToast("Enrolled successfully!");
       } else {
         Alert.alert("Enrollment Failed", json.message ?? "Could not enroll. The course may be full.");
       }
@@ -107,7 +140,7 @@ export default function CourseDetailScreen() {
     } finally {
       setIsEnrolling(false);
     }
-  }, [id, token, course]);
+  }, [id, token, enrolled, showToast]);
 
   if (isLoading) {
     return (
@@ -140,6 +173,28 @@ export default function CourseDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Toast overlay */}
+      {toastMsg && (
+        <Animated.View
+          style={[
+            styles.toast,
+            {
+              opacity: toastAnim,
+              bottom: insets.bottom + 40,
+              backgroundColor: isFavorite && toastMsg?.includes("Added") ? "#FF5C5C" : "#1a1a2e",
+              pointerEvents: "none",
+            }
+          ]}
+        >
+          <Feather
+            name={toastMsg.includes("favour") ? "heart" : "check-circle"}
+            size={16}
+            color="#fff"
+          />
+          <Text style={[styles.toastText, { fontFamily: "Inter_600SemiBold" }]}>{toastMsg}</Text>
+        </Animated.View>
+      )}
+
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
@@ -368,4 +423,21 @@ const styles = StyleSheet.create({
   reviewCard: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
   reviewHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   stars: { flexDirection: "row", gap: 2, marginLeft: "auto" },
+  toast: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    zIndex: 999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  toastText: { color: "#fff", fontSize: 14 },
 });

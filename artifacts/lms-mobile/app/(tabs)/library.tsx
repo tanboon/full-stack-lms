@@ -4,7 +4,7 @@ import {
   TextInput, ActivityIndicator, useColorScheme, RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -29,7 +29,7 @@ type Course = {
   isFavorite?: boolean;
 };
 
-const LEVELS = ["All", "beginner", "intermediate", "advanced"];
+const LEVELS = ["All", "Favourites", "beginner", "intermediate", "advanced"];
 const LEVEL_COLORS: Record<string, string> = {
   beginner: "#22C55E",
   intermediate: "#F7B731",
@@ -91,6 +91,13 @@ export default function LibraryScreen() {
     loadCourses();
   }, []);
 
+  // Reload favourites every time this tab comes back into focus [7.3]
+  useFocusEffect(
+    useCallback(() => {
+      loadFavorites();
+    }, [loadFavorites])
+  );
+
   // [7.3] Callback to sync favorite state back from detail screen
   const toggleFavorite = useCallback(async (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -107,7 +114,10 @@ export default function LibraryScreen() {
     const matchSearch =
       c.title.toLowerCase().includes(search.toLowerCase()) ||
       c.description.toLowerCase().includes(search.toLowerCase());
-    const matchLevel = selectedLevel === "All" || c.level === selectedLevel;
+    const matchLevel =
+      selectedLevel === "All" ? true :
+      selectedLevel === "Favourites" ? favorites.has(c._id) :
+      c.level === selectedLevel;
     return matchSearch && matchLevel;
   });
 
@@ -189,36 +199,66 @@ export default function LibraryScreen() {
               data={LEVELS}
               keyExtractor={l => l}
               showsHorizontalScrollIndicator={false}
-              renderItem={({ item: level }) => (
-                <Pressable
-                  onPress={() => { setSelectedLevel(level); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                  style={[
-                    styles.levelChip,
-                    {
-                      backgroundColor: selectedLevel === level ? colors.primary : colors.card,
-                      borderColor: selectedLevel === level ? colors.primary : colors.border,
-                      marginRight: 8,
-                    },
-                  ]}
-                >
-                  <Text style={[
-                    styles.levelChipText,
-                    { fontFamily: "Inter_500Medium" },
-                    selectedLevel === level ? { color: "#fff" } : { color: colors.textSecondary },
-                  ]}>
-                    {level.charAt(0).toUpperCase() + level.slice(1)}
-                  </Text>
-                </Pressable>
-              )}
+              renderItem={({ item: level }) => {
+                const isFavChip = level === "Favourites";
+                const isActive = selectedLevel === level;
+                const chipColor = isFavChip ? "#FF5C5C" : colors.primary;
+                return (
+                  <Pressable
+                    onPress={() => { setSelectedLevel(level); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    style={[
+                      styles.levelChip,
+                      {
+                        backgroundColor: isActive ? chipColor : colors.card,
+                        borderColor: isActive ? chipColor : (isFavChip ? "#FF5C5C50" : colors.border),
+                        marginRight: 8,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 5,
+                      },
+                    ]}
+                  >
+                    {isFavChip && (
+                      <Feather
+                        name="heart"
+                        size={12}
+                        color={isActive ? "#fff" : "#FF5C5C"}
+                      />
+                    )}
+                    <Text style={[
+                      styles.levelChipText,
+                      { fontFamily: "Inter_500Medium" },
+                      isActive ? { color: "#fff" } : { color: isFavChip ? "#FF5C5C" : colors.textSecondary },
+                    ]}>
+                      {level === "Favourites"
+                        ? `Favourites (${favorites.size})`
+                        : level.charAt(0).toUpperCase() + level.slice(1)}
+                    </Text>
+                  </Pressable>
+                );
+              }}
             />
           </View>
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Feather name="book" size={40} color={colors.textSecondary} />
+            <Feather
+              name={selectedLevel === "Favourites" ? "heart" : "book"}
+              size={40}
+              color={selectedLevel === "Favourites" ? "#FF5C5C" : colors.textSecondary}
+            />
             <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
-              {search ? "No matching courses" : "No courses found"}
+              {selectedLevel === "Favourites"
+                ? "No favourites yet"
+                : search
+                  ? "No matching courses"
+                  : "No courses found"}
             </Text>
+            {selectedLevel === "Favourites" && (
+              <Text style={[{ fontSize: 13, color: colors.textSecondary, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 40 }]}>
+                Tap the heart icon on any course to save it here
+              </Text>
+            )}
           </View>
         }
         renderItem={({ item }) => {
