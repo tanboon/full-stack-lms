@@ -57,9 +57,32 @@ export default function DashboardScreen() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Load enrolled IDs from AsyncStorage
-      const raw = await AsyncStorage.getItem(ENROLLED_KEY);
-      const ids: string[] = raw ? JSON.parse(raw) : [];
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      // Fetch courses + enrollments from backend in parallel
+      const [coursesRes, enrollRes] = await Promise.all([
+        fetch(`${API_BASE}/courses?limit=100`, { headers }),
+        token ? fetch(`${API_BASE}/courses/my-enrollments`, { headers }) : Promise.resolve(null),
+      ]);
+
+      const coursesJson = await coursesRes.json();
+      const all: Course[] = coursesJson.data ?? coursesJson.courses ?? [];
+      setCourses(all);
+
+      // Determine enrolled IDs — backend is source of truth, fall back to AsyncStorage
+      let ids: string[] = [];
+      if (enrollRes && enrollRes.ok) {
+        const enrollJson = await enrollRes.json();
+        // Backend returns ObjectId array — convert to strings
+        ids = (enrollJson.data ?? []).map((id: any) => id.toString());
+        // Keep AsyncStorage in sync
+        await AsyncStorage.setItem(ENROLLED_KEY, JSON.stringify(ids));
+      } else {
+        // Offline: fall back to cached AsyncStorage
+        const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+        ids = raw ? JSON.parse(raw) : [];
+      }
       setEnrolledIds(ids);
 
       // Load submitted exam count from queue
@@ -67,28 +90,15 @@ export default function DashboardScreen() {
       const q = qRaw ? JSON.parse(qRaw) : [];
       setSubmittedCount(q.filter((e: any) => e.status === "Synced").length);
 
-      // Fetch all courses from API
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch(`${API_BASE}/courses?limit=100`, { headers });
-      const json = await res.json();
-      const all: Course[] = json.data ?? json.courses ?? [];
-      setCourses(all);
-
-      // Filter to enrolled only — also prune stale IDs that no longer exist in API
-      if (ids.length > 0) {
-        const validCourses = all.filter(c => ids.includes(c._id));
-        setEnrolledCourses(validCourses);
-        // Sync AsyncStorage: remove any IDs that don't match real courses
-        const validIds = validCourses.map(c => c._id);
-        if (validIds.length !== ids.length) {
-          await AsyncStorage.setItem(ENROLLED_KEY, JSON.stringify(validIds));
-          setEnrolledIds(validIds);
-        }
-      } else {
-        setEnrolledCourses([]);
-      }
+      // Match courses to enrolled IDs
+      setEnrolledCourses(ids.length > 0 ? all.filter(c => ids.includes(c._id)) : []);
     } catch {
+      // Network failure — use AsyncStorage cache
+      try {
+        const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+        const ids: string[] = raw ? JSON.parse(raw) : [];
+        setEnrolledIds(ids);
+      } catch {}
       setEnrolledCourses([]);
     } finally {
       setIsLoading(false);

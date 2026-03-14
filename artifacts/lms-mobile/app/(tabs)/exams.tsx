@@ -102,12 +102,27 @@ export default function ExamsScreen() {
   const isSyncingRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Load enrolled course IDs from AsyncStorage
+  // Load enrolled course IDs — backend is source of truth, AsyncStorage is cache
   const loadEnrolled = useCallback(async () => {
+    try {
+      if (token) {
+        const res = await fetch(`${API_BASE}/courses/my-enrollments`, {
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const ids: string[] = (json.data ?? []).map((oid: any) => oid.toString());
+          await AsyncStorage.setItem(ENROLLED_KEY, JSON.stringify(ids));
+          setEnrolledIds(new Set(ids));
+          return;
+        }
+      }
+    } catch {}
+    // Fallback: read from AsyncStorage cache
     const raw = await AsyncStorage.getItem(ENROLLED_KEY);
     const ids: string[] = raw ? JSON.parse(raw) : [];
     setEnrolledIds(new Set(ids));
-  }, []);
+  }, [token]);
 
   // Load queue from AsyncStorage
   const loadQueue = useCallback(async () => {

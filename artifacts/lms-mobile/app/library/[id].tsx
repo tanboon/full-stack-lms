@@ -80,19 +80,44 @@ export default function CourseDetailScreen() {
     }
   }, [id, token]);
 
-  // Check persisted enrollment and favourite state on mount
+  // Check enrollment + favourite on mount (backend is source of truth, AsyncStorage is cache)
   useEffect(() => {
     loadCourse();
     (async () => {
-      const raw = await AsyncStorage.getItem(ENROLLED_KEY);
-      const ids: string[] = raw ? JSON.parse(raw) : [];
-      if (id && ids.includes(id)) setEnrolled(true);
-      // Also re-read favourite from storage (may differ from param)
+      // Check enrollment — try backend first, fall back to AsyncStorage
+      try {
+        if (token) {
+          const res = await fetch(`${API_BASE}/courses/my-enrollments`, {
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            const backendIds: string[] = (json.data ?? []).map((oid: any) => oid.toString());
+            // Sync AsyncStorage with backend data
+            await AsyncStorage.setItem(ENROLLED_KEY, JSON.stringify(backendIds));
+            if (id && backendIds.includes(id)) setEnrolled(true);
+          } else {
+            // Fall back to AsyncStorage
+            const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+            const ids: string[] = raw ? JSON.parse(raw) : [];
+            if (id && ids.includes(id)) setEnrolled(true);
+          }
+        } else {
+          const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+          const ids: string[] = raw ? JSON.parse(raw) : [];
+          if (id && ids.includes(id)) setEnrolled(true);
+        }
+      } catch {
+        const raw = await AsyncStorage.getItem(ENROLLED_KEY);
+        const ids: string[] = raw ? JSON.parse(raw) : [];
+        if (id && ids.includes(id)) setEnrolled(true);
+      }
+      // Re-read favourite from storage
       const favRaw = await AsyncStorage.getItem(FAVORITES_KEY);
       const favIds: string[] = favRaw ? JSON.parse(favRaw) : [];
       if (id) setIsFavorite(favIds.includes(id));
     })();
-  }, [id]);
+  }, [id, token]);
 
   // Persist favorite to AsyncStorage [7.3]
   const toggleFavorite = useCallback(async () => {

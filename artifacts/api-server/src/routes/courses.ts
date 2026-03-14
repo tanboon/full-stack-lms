@@ -69,6 +69,17 @@ router.get("/courses/stats/aggregation", protect, restrictTo("admin"), async (_r
 });
 
 // [4.1] Get single course
+// GET enrolled course IDs for the current user — must be before /:id to avoid conflict
+router.get("/courses/my-enrollments", protect, async (req: any, res) => {
+  try {
+    const User = (await import("../models/User.js")).default;
+    const user = await User.findById(req.user._id).select("enrolledCourses");
+    res.json({ status: "success", data: user?.enrolledCourses ?? [] });
+  } catch (err: any) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
 router.get("/courses/:id", async (req, res) => {
   try {
     const course = await Course.findById(req.params.id).populate("instructor", "name email");
@@ -119,10 +130,21 @@ router.delete("/courses/:id", protect, restrictTo("admin", "instructor"), async 
 });
 
 // [4.3] Atomic Enrollment — $inc + findOneAndUpdate + Transaction to prevent overselling
-router.post("/courses/:id/enroll", protect, async (req, res) => {
+router.post("/courses/:id/enroll", protect, async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction(); // [4.3] Mongoose transaction
   try {
+    const userId = req.user._id;
+
+    // Check if already enrolled (idempotent — return success without double-counting)
+    const User = (await import("../models/User.js")).default;
+    const alreadyEnrolled = await User.findOne({ _id: userId, enrolledCourses: req.params.id });
+    if (alreadyEnrolled) {
+      await session.abortTransaction();
+      const course = await Course.findById(req.params.id);
+      return res.json({ status: "success", message: "Already enrolled.", data: course });
+    }
+
     // [4.3] Atomic: only enroll if seats > 0, decrement atomically
     const course = await Course.findOneAndUpdate(
       { _id: req.params.id, seats: { $gt: 0 } },
@@ -134,6 +156,13 @@ router.post("/courses/:id/enroll", protect, async (req, res) => {
       await session.abortTransaction();
       return res.status(409).json({ status: "error", message: "No seats available." });
     }
+
+    // Save enrollment to User record so it persists across devices
+    await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { enrolledCourses: course._id } },
+      { session }
+    );
 
     await session.commitTransaction();
     res.json({ status: "success", message: "Enrolled successfully.", data: course });

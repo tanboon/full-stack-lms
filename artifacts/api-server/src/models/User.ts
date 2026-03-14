@@ -6,6 +6,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: "student" | "instructor" | "admin";
+  enrolledCourses: mongoose.Types.ObjectId[];
   isDeleted: boolean;
   deletedAt: Date | null;
   passwordChangedAt: Date | null;
@@ -50,6 +51,8 @@ const userSchema = new Schema<IUser>(
     deletedAt: { type: Date, default: null },
     // [5.3] For changedPasswordAfter check
     passwordChangedAt: { type: Date, default: null },
+    // Track which courses the user is enrolled in
+    enrolledCourses: [{ type: Schema.Types.ObjectId, ref: "Course", default: [] }],
     // [5.5] Brute force tracking
     loginAttempts: { type: Number, default: 0 },
     lockUntil: { type: Date, default: null },
