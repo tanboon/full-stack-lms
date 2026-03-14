@@ -33,6 +33,53 @@ async function seed() {
       level: "intermediate",
       seats: 50,
       enrolledCount: 156,
+      duration: 38,
+      videoUrl: "https://www.youtube.com/watch?v=7CqJlxBYj-M",
+      objectives: [
+        "Build a complete REST API with Express.js and MongoDB",
+        "Create a React frontend with hooks and context",
+        "Implement JWT authentication and authorization",
+        "Deploy applications to production with best practices",
+        "Write clean, maintainable code with TypeScript",
+      ],
+      curriculum: [
+        {
+          title: "Getting Started with Node.js",
+          lessons: [
+            { title: "Course Introduction & Setup", duration: 12, type: "video" },
+            { title: "Node.js Fundamentals", duration: 28, type: "video" },
+            { title: "npm & Package Management", duration: 15, type: "video" },
+            { title: "Environment Setup Quiz", duration: 10, type: "quiz" },
+          ],
+        },
+        {
+          title: "Building REST APIs with Express",
+          lessons: [
+            { title: "Express.js Basics & Routing", duration: 35, type: "video" },
+            { title: "Middleware & Error Handling", duration: 30, type: "video" },
+            { title: "MongoDB & Mongoose Integration", duration: 40, type: "video" },
+            { title: "REST API Best Practices", duration: 20, type: "reading" },
+          ],
+        },
+        {
+          title: "React Frontend Development",
+          lessons: [
+            { title: "React Hooks Deep Dive", duration: 45, type: "video" },
+            { title: "State Management with Context", duration: 30, type: "video" },
+            { title: "Connecting Frontend to API", duration: 35, type: "video" },
+            { title: "React Patterns Quiz", duration: 15, type: "quiz" },
+          ],
+        },
+        {
+          title: "Authentication & Deployment",
+          lessons: [
+            { title: "JWT Authentication Implementation", duration: 40, type: "video" },
+            { title: "Security Best Practices", duration: 20, type: "reading" },
+            { title: "Deploying to Production", duration: 35, type: "video" },
+            { title: "Final Project Review", duration: 25, type: "video" },
+          ],
+        },
+      ],
     },
     {
       title: "Database Systems: SQL and NoSQL Mastery",
@@ -45,6 +92,44 @@ async function seed() {
       level: "advanced",
       seats: 30,
       enrolledCount: 89,
+      duration: 28,
+      videoUrl: "",
+      objectives: [
+        "Master MongoDB aggregation pipelines and operators",
+        "Design efficient relational schemas with PostgreSQL",
+        "Implement indexing strategies for performance optimization",
+        "Understand the CAP theorem and distributed database concepts",
+        "Write complex queries with JOINs and subqueries",
+      ],
+      curriculum: [
+        {
+          title: "Relational Database Fundamentals",
+          lessons: [
+            { title: "Introduction to Database Systems", duration: 20, type: "video" },
+            { title: "SQL Queries & JOINs", duration: 45, type: "video" },
+            { title: "Schema Design Principles", duration: 30, type: "video" },
+            { title: "SQL Fundamentals Quiz", duration: 15, type: "quiz" },
+          ],
+        },
+        {
+          title: "PostgreSQL Advanced",
+          lessons: [
+            { title: "Indexes & Query Optimization", duration: 40, type: "video" },
+            { title: "Transactions & ACID Properties", duration: 35, type: "video" },
+            { title: "PostgreSQL Performance Tuning", duration: 25, type: "reading" },
+          ],
+        },
+        {
+          title: "MongoDB & NoSQL",
+          lessons: [
+            { title: "Document Model vs Relational", duration: 25, type: "video" },
+            { title: "Aggregation Pipeline Mastery", duration: 50, type: "video" },
+            { title: "MongoDB Indexing Strategies", duration: 35, type: "video" },
+            { title: "NoSQL Design Patterns", duration: 20, type: "reading" },
+            { title: "Database Mastery Final Quiz", duration: 20, type: "quiz" },
+          ],
+        },
+      ],
     },
     {
       title: "React Native Mobile App Development with Expo",
@@ -57,6 +142,53 @@ async function seed() {
       level: "intermediate",
       seats: 40,
       enrolledCount: 203,
+      duration: 42,
+      videoUrl: "https://www.youtube.com/watch?v=0-S5a0eXPoc",
+      objectives: [
+        "Build cross-platform iOS and Android apps from one codebase",
+        "Implement file-based routing with Expo Router",
+        "Manage app state with AsyncStorage and Context API",
+        "Handle offline scenarios with NetInfo",
+        "Publish apps to the App Store and Google Play",
+      ],
+      curriculum: [
+        {
+          title: "React Native & Expo Basics",
+          lessons: [
+            { title: "Introduction to React Native", duration: 20, type: "video" },
+            { title: "Setting Up Your Expo Environment", duration: 25, type: "video" },
+            { title: "Core Components: View, Text, Image", duration: 30, type: "video" },
+            { title: "Styling with StyleSheet", duration: 20, type: "video" },
+          ],
+        },
+        {
+          title: "Navigation & Routing",
+          lessons: [
+            { title: "Expo Router File-Based Routing", duration: 35, type: "video" },
+            { title: "Tab & Stack Navigation", duration: 40, type: "video" },
+            { title: "Deep Linking & Dynamic Routes", duration: 30, type: "video" },
+            { title: "Navigation Patterns Quiz", duration: 10, type: "quiz" },
+          ],
+        },
+        {
+          title: "State & Data Management",
+          lessons: [
+            { title: "React Hooks in Mobile Context", duration: 35, type: "video" },
+            { title: "AsyncStorage for Persistence", duration: 25, type: "video" },
+            { title: "Context API & State Patterns", duration: 30, type: "video" },
+            { title: "NetInfo & Offline Handling", duration: 20, type: "video" },
+          ],
+        },
+        {
+          title: "Publishing & Best Practices",
+          lessons: [
+            { title: "App Permissions & Native APIs", duration: 25, type: "video" },
+            { title: "Performance Optimization", duration: 20, type: "reading" },
+            { title: "Building & Publishing to Stores", duration: 35, type: "video" },
+            { title: "Mobile Dev Final Quiz", duration: 15, type: "quiz" },
+          ],
+        },
+      ],
     },
     {
       title: "Data Structures and Algorithms Fundamentals",
@@ -69,6 +201,52 @@ async function seed() {
       level: "beginner",
       seats: 100,
       enrolledCount: 412,
+      duration: 24,
+      videoUrl: "",
+      objectives: [
+        "Understand Big O notation and time/space complexity",
+        "Implement arrays, linked lists, stacks, and queues",
+        "Master tree and graph traversal algorithms",
+        "Solve dynamic programming problems with confidence",
+        "Prepare effectively for technical coding interviews",
+      ],
+      curriculum: [
+        {
+          title: "Foundations & Complexity",
+          lessons: [
+            { title: "Why Data Structures Matter", duration: 15, type: "video" },
+            { title: "Big O Notation Explained", duration: 30, type: "video" },
+            { title: "Arrays & Memory Layout", duration: 25, type: "video" },
+            { title: "Complexity Analysis Quiz", duration: 10, type: "quiz" },
+          ],
+        },
+        {
+          title: "Linear Data Structures",
+          lessons: [
+            { title: "Linked Lists: Single & Double", duration: 35, type: "video" },
+            { title: "Stacks & Queues", duration: 30, type: "video" },
+            { title: "Hash Maps & Collision Handling", duration: 40, type: "video" },
+            { title: "Linear Structures Practice", duration: 15, type: "reading" },
+          ],
+        },
+        {
+          title: "Trees & Graphs",
+          lessons: [
+            { title: "Binary Trees & BST", duration: 40, type: "video" },
+            { title: "BFS & DFS Traversals", duration: 35, type: "video" },
+            { title: "Graph Algorithms", duration: 45, type: "video" },
+            { title: "Trees & Graphs Quiz", duration: 15, type: "quiz" },
+          ],
+        },
+        {
+          title: "Sorting & Dynamic Programming",
+          lessons: [
+            { title: "Sorting Algorithms Compared", duration: 35, type: "video" },
+            { title: "Intro to Dynamic Programming", duration: 40, type: "video" },
+            { title: "Interview Problem Walkthrough", duration: 30, type: "video" },
+          ],
+        },
+      ],
     },
     {
       title: "Machine Learning with Python and PyTorch",
@@ -81,6 +259,53 @@ async function seed() {
       level: "advanced",
       seats: 25,
       enrolledCount: 178,
+      duration: 52,
+      videoUrl: "",
+      objectives: [
+        "Implement supervised and unsupervised ML algorithms from scratch",
+        "Use scikit-learn for model training and evaluation",
+        "Build neural networks with PyTorch",
+        "Apply feature engineering and data preprocessing techniques",
+        "Deploy machine learning models to production APIs",
+      ],
+      curriculum: [
+        {
+          title: "Python for Machine Learning",
+          lessons: [
+            { title: "Python & NumPy Refresher", duration: 30, type: "video" },
+            { title: "Pandas for Data Analysis", duration: 40, type: "video" },
+            { title: "Data Visualization with Matplotlib", duration: 30, type: "video" },
+            { title: "Data Preprocessing Lab", duration: 20, type: "reading" },
+          ],
+        },
+        {
+          title: "Classical Machine Learning",
+          lessons: [
+            { title: "Linear & Logistic Regression", duration: 45, type: "video" },
+            { title: "Decision Trees & Random Forests", duration: 40, type: "video" },
+            { title: "Model Evaluation & Cross-Validation", duration: 35, type: "video" },
+            { title: "Scikit-Learn Workflow Quiz", duration: 15, type: "quiz" },
+          ],
+        },
+        {
+          title: "Deep Learning with PyTorch",
+          lessons: [
+            { title: "Neural Network Fundamentals", duration: 50, type: "video" },
+            { title: "Building Models in PyTorch", duration: 55, type: "video" },
+            { title: "Convolutional Neural Networks", duration: 50, type: "video" },
+            { title: "Training & Optimization Tricks", duration: 35, type: "video" },
+            { title: "Deep Learning Quiz", duration: 20, type: "quiz" },
+          ],
+        },
+        {
+          title: "Real-World ML Projects",
+          lessons: [
+            { title: "End-to-End ML Pipeline", duration: 60, type: "video" },
+            { title: "Deploying Models as APIs", duration: 40, type: "video" },
+            { title: "Capstone Project Guide", duration: 20, type: "reading" },
+          ],
+        },
+      ],
     },
   ]);
   console.log("Courses seeded:", courses.length);

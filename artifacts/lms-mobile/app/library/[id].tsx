@@ -322,7 +322,49 @@ export default function CourseDetailScreen() {
           <Text style={[styles.descText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
             {course.description || "No description provided."}
           </Text>
+          {/* Course info row */}
+          <View style={styles.infoRow}>
+            {course.duration > 0 && (
+              <View style={[styles.infoChip, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "25" }]}>
+                <Feather name="clock" size={12} color={colors.primary} />
+                <Text style={[styles.infoChipText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                  {course.duration}h total
+                </Text>
+              </View>
+            )}
+            <View style={[styles.infoChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="layers" size={12} color={colors.textSecondary} />
+              <Text style={[styles.infoChipText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
+                {course.curriculum?.reduce((acc: number, s: any) => acc + (s.lessons?.length ?? 0), 0) || 0} lessons
+              </Text>
+            </View>
+            <View style={[styles.infoChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="bar-chart-2" size={12} color={colors.textSecondary} />
+              <Text style={[styles.infoChipText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
+                {course.level}
+              </Text>
+            </View>
+          </View>
         </View>
+
+        {/* What You'll Learn */}
+        {course.objectives?.length > 0 && (
+          <View style={[styles.section, { borderTopColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>What You'll Learn</Text>
+            <View style={{ gap: 10 }}>
+              {course.objectives.map((obj: string, idx: number) => (
+                <View key={idx} style={styles.objectiveRow}>
+                  <View style={[styles.checkCircle, { backgroundColor: "#22C55E18", borderColor: "#22C55E40" }]}>
+                    <Feather name="check" size={12} color="#22C55E" />
+                  </View>
+                  <Text style={[styles.objectiveText, { color: colors.text, fontFamily: "Inter_400Regular" }]}>
+                    {obj}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Tags */}
         {course.tags?.length > 0 && (
@@ -337,6 +379,100 @@ export default function CourseDetailScreen() {
             </View>
           </View>
         )}
+
+        {/* Course Curriculum — unlocked for enrolled students */}
+        {course.curriculum?.length > 0 && (
+          <View style={[styles.section, { borderTopColor: colors.border }]}>
+            <View style={styles.curriculumHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>
+                Course Curriculum
+              </Text>
+              {enrolled ? (
+                <View style={[styles.unlockedBadge, { backgroundColor: "#22C55E15", borderColor: "#22C55E40" }]}>
+                  <Feather name="unlock" size={11} color="#22C55E" />
+                  <Text style={[{ fontSize: 11, color: "#22C55E", fontFamily: "Inter_600SemiBold" }]}>Unlocked</Text>
+                </View>
+              ) : (
+                <View style={[styles.unlockedBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Feather name="lock" size={11} color={colors.textSecondary} />
+                  <Text style={[{ fontSize: 11, color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Enroll to access</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={{ gap: 10 }}>
+              {course.curriculum.map((section: any, sIdx: number) => (
+                <View key={sIdx} style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  {/* Section header */}
+                  <View style={[styles.sectionCardHeader, { borderBottomColor: colors.border }]}>
+                    <View style={[styles.sectionNum, { backgroundColor: colors.primary + "20" }]}>
+                      <Text style={[{ fontSize: 11, color: colors.primary, fontFamily: "Inter_700Bold" }]}>{sIdx + 1}</Text>
+                    </View>
+                    <Text style={[styles.sectionCardTitle, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>
+                      {section.title}
+                    </Text>
+                    <Text style={[{ fontSize: 11, color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                      {section.lessons?.length ?? 0} lessons
+                    </Text>
+                  </View>
+
+                  {/* Lessons */}
+                  <View style={{ gap: 0 }}>
+                    {section.lessons?.map((lesson: any, lIdx: number) => {
+                      const typeIcon = lesson.type === "video" ? "play-circle" : lesson.type === "quiz" ? "clipboard" : "file-text";
+                      const typeColor = lesson.type === "video" ? colors.primary : lesson.type === "quiz" ? "#F7B731" : "#22C55E";
+                      const isLocked = !enrolled && lIdx > 0;
+                      return (
+                        <View
+                          key={lIdx}
+                          style={[
+                            styles.lessonRow,
+                            { borderTopColor: colors.border, borderTopWidth: lIdx === 0 ? 0 : 1, opacity: isLocked ? 0.45 : 1 },
+                          ]}
+                        >
+                          <Feather name={isLocked ? "lock" : (typeIcon as any)} size={14} color={isLocked ? colors.textSecondary : typeColor} />
+                          <Text
+                            style={[styles.lessonTitle, { color: isLocked ? colors.textSecondary : colors.text, fontFamily: "Inter_400Regular" }]}
+                            numberOfLines={1}
+                          >
+                            {lesson.title}
+                          </Text>
+                          <Text style={[styles.lessonDuration, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                            {lesson.duration}m
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Video Link — only for enrolled */}
+        {enrolled && course.videoUrl ? (
+          <View style={[styles.section, { borderTopColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>Course Video</Text>
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); require("react-native").Linking.openURL(course.videoUrl); }}
+              style={[styles.videoBtn, { backgroundColor: "#FF5C5C15", borderColor: "#FF5C5C40" }]}
+            >
+              <View style={[styles.playIcon, { backgroundColor: "#FF5C5C" }]}>
+                <Feather name="play" size={16} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[{ fontSize: 14, color: colors.text, fontFamily: "Inter_600SemiBold" }]}>
+                  Watch Course Video
+                </Text>
+                <Text style={[{ fontSize: 12, color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+                  {course.videoUrl}
+                </Text>
+              </View>
+              <Feather name="external-link" size={16} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Reviews Preview */}
         {course.reviews?.length > 0 && (
@@ -420,6 +556,23 @@ const styles = StyleSheet.create({
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tagChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   tagText: { fontSize: 12 },
+  infoRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  infoChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
+  infoChipText: { fontSize: 12 },
+  objectiveRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  checkCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, justifyContent: "center", alignItems: "center", marginTop: 1, flexShrink: 0 },
+  objectiveText: { flex: 1, fontSize: 14, lineHeight: 21 },
+  curriculumHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  unlockedBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
+  sectionCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  sectionCardHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1 },
+  sectionNum: { width: 24, height: 24, borderRadius: 8, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  sectionCardTitle: { flex: 1, fontSize: 14 },
+  lessonRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  lessonTitle: { flex: 1, fontSize: 13 },
+  lessonDuration: { fontSize: 11 },
+  videoBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  playIcon: { width: 38, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   reviewCard: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
   reviewHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   stars: { flexDirection: "row", gap: 2, marginLeft: "auto" },

@@ -7,6 +7,17 @@ interface IReview {
   createdAt: Date;
 }
 
+interface ILesson {
+  title: string;
+  duration: number; // minutes
+  type: "video" | "reading" | "quiz";
+}
+
+interface ICurriculumSection {
+  title: string;
+  lessons: ILesson[];
+}
+
 export interface ICourse extends Document {
   title: string;
   description: string;
@@ -24,6 +35,9 @@ export interface ICourse extends Document {
   isDeleted: boolean;  // [4.2]
   deletedAt: Date | null; // [4.2]
   videoUrl: string;
+  duration: number;   // total hours
+  objectives: string[];
+  curriculum: ICurriculumSection[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -95,6 +109,26 @@ const courseSchema = new Schema<ICourse>(
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     videoUrl: { type: String, default: "" },
+    duration: { type: Number, default: 0 },
+    objectives: { type: [String], default: [] },
+    curriculum: {
+      type: [
+        {
+          title: { type: String, required: true },
+          lessons: {
+            type: [
+              {
+                title: { type: String, required: true },
+                duration: { type: Number, default: 0 },
+                type: { type: String, enum: ["video", "reading", "quiz"], default: "video" },
+              },
+            ],
+            default: [],
+          },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,
