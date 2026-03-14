@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export const API_BASE = "https://c80ad5b9-f987-4edd-b1e4-e0e56710da93-00-28eoe9ojq7n75.riker.replit.dev/api";
+export const API_BASE = "http://192.168.1.36:8080/api";
 
 const TOKEN_KEY = "lms_mobile_token";
 const USER_KEY = "lms_mobile_user";
@@ -90,7 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ token, user, isLoading, login, register, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

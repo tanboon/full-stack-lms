@@ -1,49 +1,42 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# dependencies
+node_modules
+.pnpm-debug.log*
 
-# compiled output
+# build output
 dist
-tmp
 out-tsc
 *.tsbuildinfo
 .expo
 .expo-shared
+web-build
+artifacts/*/dist
+artifacts/*/build
 
-# dependencies
-node_modules
+# env files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
 
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
-
-# System Files
+# IDEs
+.idea
+.vscode
+*.swp
+*.swo
 .DS_Store
-Thumbs.db
-
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
 
 # Replit
 .cache/
 .local/
+.replit
+replit.md
+scripts/post-merge.sh
+
